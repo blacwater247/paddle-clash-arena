@@ -1,45 +1,62 @@
-## Problem
+# Plan: Landing Page + Pro-Gamer Music System
 
-Mid-match, the game jumps back to the start screen instead of letting the match finish. There's no code path in `PaddleClashArena.tsx` that calls `setScreen("start")` during play — `endMatch` only sets `"end"`, and pause only toggles `"play"` ↔ `"paused"`. So the screen is being reset because **the component (or its parent) is remounting**, which throws `useState<Screen>("start")` back to its initial value.
+## 1. Landing Page (new `/` route)
 
-Two strong suspects, both introduced in the recent Super Powers / Adaptive AI / new shop items work:
+Move the current game from `/` to `/play`, and make `/` a marketing-style landing page styled for a pro-gamer audience.
 
-### Suspect 1 — Hydration mismatch triggers tree regeneration
-The current runtime error log shows:
+Sections:
+- **Hero** — Animated arena background, big logo "PADDLE CLASH ARENA", tagline, primary CTA "Play Now" → `/play`, secondary "How to Play".
+- **Feature grid** — Power-ups, Super Powers, Boss Battles, Stages/Arenas, 2-Player, Shop & Ranks.
+- **Stages showcase** — Carousel of arena tables (Midnight, Volcano, Cyber Grid, Sky Temple…) with names + unlock level.
+- **Boss preview** — Tease of boss matches with stats (HP, special moves).
+- **Ranks ladder** — Rookie → Arena God progression visual.
+- **Soundtrack strip** — "Featuring an original soundtrack" with a 🔊 preview button (plays a short clip of the stage track).
+- **Final CTA + footer**.
 
-```
-Hydration failed because the server rendered text didn't match the client.
-CoinChip coins={358}  (client)  vs  200 (server)
-```
+Visual direction: dark slate background, neon cyan/gold accents, sharp angular cards, subtle scanlines/grid, Orbitron/Rajdhani-style display font for headings (loaded via `<link>` in `__root.tsx`).
 
-React's response is "this tree will be regenerated on the client". On the very first client render after hydration that's a partial unmount/remount of the subtree containing `PaddleClashArena`, which resets `screen` to `"start"`. The mismatch comes from `useRewards()` reading `localStorage` synchronously during render — SSR sees defaults (200 coins), client sees the saved value (358 coins).
+SEO: route-specific `head()` with title, description, OG tags, og:image (generated hero image).
 
-### Suspect 2 — Throw inside `endMatch` / super-power effect crashes the loop
-If `getSuper(s.superId)`, `recordMatchResult`, `grantMatchRewards`, or the new Mirror Wall / Phantom Clone / Chain Lightning branches throw, the React error boundary above this route can unmount `PaddleClashArena`. Next render → fresh `useState("start")`. Likely triggers: `equipped.super` missing from older saved data (migration gap), or `activeSuperP1.until` being read when `pendingHit` is set, etc.
+## 2. In-Game Music System
 
-## Fix
+Three uploaded tracks become the soundtrack, uploaded as CDN assets via `lovable-assets`:
 
-### 1. Eliminate the SSR/CSR hydration mismatch (root cause #1)
-- Change `useRewards()` (and any `localStorage`-reading state) to initialize with the **default** value, then hydrate from `localStorage` inside a `useEffect`. Render coins / XP / owned items as `0` / empty on the server pass, then update once on the client.
-- Same treatment for `useSettings()` and `getSkillTier()` if they read storage during render.
-- Verify by reloading mid-match: the runtime hydration error should be gone.
+| Track file | Role in game |
+|---|---|
+| `DIFFENERENT STAGES.mp3` | Default match music (Arcade / Challenge / 2-Player) |
+| `BOSS LEVEL AND DIFFERENT STAGES.mp3` | Boss matches |
+| `WHEN SHOPPING MUSIIC.mp3` | Shop / Rewards UI screen |
 
-### 2. Guard the super-power / rewards code paths (root cause #2)
-- In `rewards.ts`, harden the localStorage migration: when loading old saves missing `equipped.super` / `ownedSupers`, fill in `{ super: "meteor", ownedSupers: ["meteor"] }` before returning. Same for any new SHOP_ITEMS the user hasn't seen.
-- In `PaddleClashArena.tsx` `activateSuper` and per-frame effect tick, fall back to `getSuper("meteor")` if `getSuper(s.superId)` returns undefined, and skip effects whose `until` is undefined for time-based powers.
-- Wrap `endMatch`'s reward block in a `try/catch` that still calls `setScreen("end")` even if reward grant throws, so a single bad reward can never bounce the player to start.
+Implementation:
+- New `src/lib/music.ts` — singleton `HTMLAudioElement` per track, with `playTrack(id)`, `stop()`, `setVolume()`, crossfade on switch, loop=true, respects `settings.musicMuted` and `settings.musicVolume` (default 0.5).
+- Hydration-safe: only starts after first user interaction (browser autoplay policy) — listen for first click on the Play/Start button.
+- Hook `useGameMusic(screen, mode)` inside `PaddleClashArena` picks the right track:
+  - `screen === "shop"` → shopping track
+  - `screen === "playing" && mode === "boss"` → boss track
+  - `screen === "playing"` (other modes) → stages track
+  - otherwise → fade out (menu silence)
+- Landing page: silent by default; soundtrack preview button plays a 15-second sample of the stages track.
 
-### 3. Add a top-level error boundary that does NOT remount the whole arena
-Wrap `PaddleClashArena` in a small error boundary (or use the existing one) that shows an inline "Something broke — return to menu" panel **without** discarding the canvas tree, so even a thrown render error can't silently reset `screen` to `"start"`.
+## 3. Settings additions
 
-### 4. Verify
-- Reload the app, start an Arcade match, play past several rallies, ensure no runtime errors in console.
-- Fill the super meter, activate the super, keep playing — match must continue.
-- Reach the win target — confirm the End screen shows (not Start).
-- Test in Challenge and Boss modes too.
+Extend `useSettings` (in `PaddleClashArena.tsx`) with `musicMuted: boolean` and `musicVolume: number`. Add a 🎵 toggle + volume slider in the in-game header next to existing SFX controls. Persist to localStorage with same hydration-safe pattern already used.
+
+## 4. Routing
+
+- `src/routes/index.tsx` → new `LandingPage` component (file `src/components/LandingPage.tsx`).
+- `src/routes/play.tsx` → renders `PaddleClashArena` (move existing meta there, update canonical).
+- Update internal links and the "Play" CTA to use `<Link to="/play">`.
+- Update `sitemap[.]xml.ts` to include both routes.
+
+## Technical notes
+
+- Asset uploads: `lovable-assets create --file /mnt/user-uploads/<name>.mp3 --filename <slug>.mp3 > src/assets/<slug>.mp3.asset.json`, then import the JSON for `audio.src = asset.url`.
+- All audio code runs only after mount + first user gesture to avoid SSR/autoplay issues (same hydration pattern as recent rewards fix).
+- Hero og:image generated via imagegen (premium tier for legible logo text).
+- No changes to game logic, rewards, AI, or super-powers — purely additive.
 
 ## Out of scope
 
-- No gameplay/balance changes.
-- No UI redesign of HUD, shop, or end screen.
-- No new powers or new shop items.
+- New stage/boss content (existing tables and boss mode remain as-is).
+- Per-stage unique tracks beyond the three provided.
+- Online multiplayer / accounts.
