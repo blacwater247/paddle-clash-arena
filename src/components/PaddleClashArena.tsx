@@ -709,6 +709,9 @@ export default function PaddleClashArena() {
             s.flash = 32; s.flashColor = "#EF4444";
             beep(180, 0.3, "sawtooth", 0.2);
             haptic(30);
+            // Meter: player lost a point → catch-up gain
+            s.superMeterP1 = Math.min(METER_MAX, s.superMeterP1 + METER_GAIN.pointLost);
+            if (s.mode === "twoplayer") s.superMeterP2 = Math.min(METER_MAX, s.superMeterP2 + METER_GAIN.pointWon);
             if (s.scores.ai - s.scores.player >= 3) s.wasDownBy3 = true;
             if (s.scores.ai >= s.winTarget) endMatch("ai");
             else resetBall(1);
@@ -728,11 +731,15 @@ export default function PaddleClashArena() {
             beep(880, 0.22, "triangle", 0.22);
             beep(1320, 0.16, "triangle", 0.18);
             haptic(20);
+            // Meter: point won
+            s.superMeterP1 = Math.min(METER_MAX, s.superMeterP1 + METER_GAIN.pointWon);
+            if (s.mode === "twoplayer") s.superMeterP2 = Math.min(METER_MAX, s.superMeterP2 + METER_GAIN.pointLost);
             if (s.mode !== "twoplayer") rewardsRef.current.recordPoint();
             if (s.scores.player >= s.winTarget) endMatch("player");
             else resetBall(-1);
           }
         }
+
 
         s.trail.push({ x: s.ballX, y: s.ballY });
         if (s.trail.length > 22) s.trail.shift();
