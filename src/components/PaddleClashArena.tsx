@@ -308,6 +308,34 @@ export default function PaddleClashArena() {
     }
   };
 
+  // ===== Super activation =====
+  const activateSuper = useCallback((player: "p1" | "p2") => {
+    const s = state.current;
+    if (!s.running || s.paused) return;
+    const meterKey = player === "p1" ? "superMeterP1" : "superMeterP2";
+    const activeKey = player === "p1" ? "activeSuperP1" : "activeSuperP2";
+    if (s[meterKey] < METER_MAX) return;
+    if (s[activeKey]) return;
+    const def = getSuper(s.superId);
+    s[meterKey] = 0;
+    setSuperMeter({ p1: s.superMeterP1, p2: s.superMeterP2 });
+
+    if (def.id === "meteor" || def.id === "chain") {
+      s[activeKey] = { id: def.id, pendingHit: true };
+    } else {
+      s[activeKey] = { id: def.id, until: performance.now() + def.durationMs };
+    }
+    s.flash = 26; s.flashColor = def.color;
+    s.shake = 10;
+    spawnHitParticles(player === "p1" ? 60 : BASE_W - 60, BASE_H / 2, def.color, 36);
+    beep(900, 0.12, "triangle", 0.22);
+    beep(1400, 0.10, "triangle", 0.18);
+    haptic(30);
+    setSuperBanner({ id: def.id, ts: performance.now() });
+    setTimeout(() => setSuperBanner(null), 1500);
+  }, [beep]);
+
+
   // Input
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
