@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://paddle-clash-arena.lovable.app/sitemap.xml

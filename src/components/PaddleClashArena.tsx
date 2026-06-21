@@ -1001,10 +1001,12 @@ function Title() {
   return (
     <div className="text-center">
       <p className="mb-2 text-[10px] tracking-[0.5em] text-muted-foreground sm:text-xs">PREMIUM · ARCADE · TABLE TENNIS</p>
-      <h1 className="text-4xl font-black uppercase leading-none tracking-[0.12em] text-foreground text-glow-gold sm:text-7xl">
-        Paddle <span className="text-[oklch(0.7_0.22_245)] text-glow-electric">Clash</span>
+      <h1 className="flex flex-col items-center gap-1 font-black uppercase text-foreground">
+        <span className="text-4xl leading-none tracking-[0.12em] text-glow-gold sm:text-7xl">
+          Paddle <span className="text-[oklch(0.7_0.22_245)] text-glow-electric">Clash</span>
+        </span>
+        <span className="text-3xl tracking-[0.4em] sm:text-5xl">Arena</span>
       </h1>
-      <h1 className="text-3xl font-black uppercase tracking-[0.4em] text-foreground sm:text-5xl">Arena</h1>
     </div>
   );
 }
