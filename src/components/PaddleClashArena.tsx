@@ -517,7 +517,18 @@ export default function PaddleClashArena() {
           s.ballVY += s.ballSpin * 0.06;
         }
         const slowActive = s.effects.some(e => e.kind === "slow");
-        const effectiveDt = slowActive ? 0.55 : dtScale;
+
+        // ===== Super: Time Warp (slows ball + opponent) =====
+        const nowTs = performance.now();
+        const tw1 = s.activeSuperP1?.id === "timewarp" && (s.activeSuperP1.until ?? 0) > nowTs;
+        const tw2 = s.activeSuperP2?.id === "timewarp" && (s.activeSuperP2.until ?? 0) > nowTs;
+        const ballSlowFactor = (tw1 || tw2) ? 0.45 : (slowActive ? 0.55 : 1);
+        const effectiveDt = ballSlowFactor < 1 ? dtScale * ballSlowFactor : dtScale;
+
+        // ===== Super: Chain Lightning (ball zig-zag while in flight) =====
+        if (s.chainOnBall) {
+          s.ballVY += Math.sin(tms * 0.018) * 1.1;
+        }
 
         s.ballX += s.ballVX * effectiveDt;
         s.ballY += s.ballVY * effectiveDt;
@@ -525,16 +536,35 @@ export default function PaddleClashArena() {
         if (s.ballY - BALL_R < 0) { s.ballY = BALL_R; s.ballVY = -s.ballVY; beep(440, 0.04, "square", 0.07); }
         if (s.ballY + BALL_R > BASE_H) { s.ballY = BASE_H - BALL_R; s.ballVY = -s.ballVY; beep(440, 0.04, "square", 0.07); }
 
-        const collide = (paddleX: number, paddleY: number, side: "player" | "ai") => {
+        // Mirror Wall: paddle height multiplier
+        const mirrorP1 = s.activeSuperP1?.id === "mirror" && (s.activeSuperP1.until ?? 0) > nowTs;
+        const mirrorP2 = s.activeSuperP2?.id === "mirror" && (s.activeSuperP2.until ?? 0) > nowTs;
+        const playerH = mirrorP1 ? PADDLE_H * 2 : PADDLE_H;
+        const aiH = (s.mode === "twoplayer" && mirrorP2) ? PADDLE_H * 2 : PADDLE_H;
+
+        const collide = (paddleX: number, paddleY: number, side: "player" | "ai", pH: number) => {
           const isPlayer = side === "player";
           const dirIn = isPlayer ? s.ballVX < 0 : s.ballVX > 0;
           const xCond = isPlayer
             ? (s.ballX - BALL_R < paddleX + PADDLE_W && s.ballX - BALL_R > paddleX - 6)
             : (s.ballX + BALL_R > paddleX && s.ballX + BALL_R < paddleX + PADDLE_W + 6);
           if (!dirIn || !xCond) return false;
-          if (s.ballY < paddleY || s.ballY > paddleY + PADDLE_H) return false;
+          if (s.ballY < paddleY || s.ballY > paddleY + pH) return false;
 
-          const hit = (s.ballY - (paddleY + PADDLE_H / 2)) / (PADDLE_H / 2);
+          // Chain Lightning pierce
+          if (s.chainOnBall === "player" && side === "ai") {
+            s.chainOnBall = null;
+            spawnHitParticles(s.ballX, s.ballY, "#FACC15", 24);
+            beep(1200, 0.08, "sawtooth", 0.2);
+            return false;
+          }
+          if (s.chainOnBall === "ai" && side === "player") {
+            s.chainOnBall = null;
+            spawnHitParticles(s.ballX, s.ballY, "#FACC15", 24);
+            return false;
+          }
+
+          const hit = (s.ballY - (paddleY + pH / 2)) / (pH / 2);
           let speed = Math.min(BALL_MAX_SPEED, Math.hypot(s.ballVX, s.ballVY) * 1.08);
           const eff = s.effects.find(e => e.owner === side);
           if (eff?.kind === "smash") {
@@ -545,22 +575,55 @@ export default function PaddleClashArena() {
           if (eff?.kind === "curve") s.ballSpin = hit * 4;
           else s.ballSpin = 0;
 
+          // Super: Meteor Smash / Chain on next hit
+          const sup = isPlayer ? s.activeSuperP1 : (s.mode === "twoplayer" ? s.activeSuperP2 : null);
+          let superTriggered: SuperId | null = null;
+          if (sup?.pendingHit && sup.id === "meteor") {
+            speed = Math.min(BALL_MAX_SPEED + 8, speed * 2.5);
+            s.ballFire = true;
+            s.smashFor = side;
+            s.shake = 22;
+            superTriggered = "meteor";
+            if (isPlayer) s.activeSuperP1 = null; else s.activeSuperP2 = null;
+          }
+          if (sup?.pendingHit && sup.id === "chain") {
+            speed = Math.min(BALL_MAX_SPEED + 4, speed * 1.4);
+            s.chainOnBall = side;
+            superTriggered = "chain";
+            if (isPlayer) s.activeSuperP1 = null; else s.activeSuperP2 = null;
+          }
+
+          // AI smash from adaptive difficulty
+          if (side === "ai" && s.mode !== "twoplayer" && Math.random() < s.aiParams.smashChance) {
+            speed = Math.min(BALL_MAX_SPEED + 2, speed * 1.35);
+          }
+
           const angle = isPlayer ? hit * 0.95 : Math.PI - hit * 0.95;
           s.ballVX = Math.cos(angle) * speed;
           s.ballVY = Math.sin(angle) * speed;
           s.ballX = isPlayer ? paddleX + PADDLE_W + BALL_R : paddleX - BALL_R;
-          s.shake = Math.min(14, speed * 0.7);
+          s.shake = Math.max(s.shake, Math.min(20, speed * 0.7));
 
           const skinPreview = getEquippedPreview(s.paddleId, "paddle:classic");
           const col = isPlayer ? (skinPreview.glow ?? "#FFD700") : "#F87171";
-          spawnHitParticles(s.ballX, s.ballY, col, eff?.kind === "smash" ? 28 : 16);
-          if (eff?.kind === "smash") spawnSparkLine(s.ballX, s.ballY, "#FFD700");
+          const particleCount = superTriggered === "meteor" ? 40 : (eff?.kind === "smash" ? 28 : 16);
+          spawnHitParticles(s.ballX, s.ballY, superTriggered === "chain" ? "#FACC15" : col, particleCount);
+          if (eff?.kind === "smash" || superTriggered === "meteor") spawnSparkLine(s.ballX, s.ballY, "#FFD700");
           beep(580 + Math.abs(hit) * 220, 0.06, "square", 0.18);
-          haptic(eff?.kind === "smash" ? 24 : 10);
+          haptic(superTriggered ? 30 : (eff?.kind === "smash" ? 24 : 10));
 
           if (eff && (eff.kind === "smash" || eff.kind === "curve")) {
             s.effects = s.effects.filter(e => e !== eff);
           }
+
+          // Super meter gain on rally hit
+          if (s.mode !== "twoplayer") {
+            if (isPlayer) s.superMeterP1 = Math.min(METER_MAX, s.superMeterP1 + METER_GAIN.rallyHit);
+          } else {
+            if (isPlayer) s.superMeterP1 = Math.min(METER_MAX, s.superMeterP1 + METER_GAIN.rallyHit);
+            else          s.superMeterP2 = Math.min(METER_MAX, s.superMeterP2 + METER_GAIN.rallyHit);
+          }
+
           s.rally += 1;
           if (s.rally > s.maxRally) {
             s.maxRally = s.rally;
@@ -570,8 +633,21 @@ export default function PaddleClashArena() {
           return true;
         };
 
-        const hitP = collide(30, s.playerY, "player");
-        const hitA = !hitP && collide(BASE_W - 30 - PADDLE_W, s.aiY, "ai");
+        const hitP = collide(30, s.playerY, "player", playerH);
+        const hitA = !hitP && collide(BASE_W - 30 - PADDLE_W, s.aiY, "ai", aiH);
+
+        // Phantom Clone: mirror ghost paddle
+        const phP1 = s.activeSuperP1?.id === "phantom" && (s.activeSuperP1.until ?? 0) > nowTs;
+        const phP2 = s.mode === "twoplayer" && s.activeSuperP2?.id === "phantom" && (s.activeSuperP2.until ?? 0) > nowTs;
+        if (!hitP && !hitA && phP1) {
+          const ghostY = BASE_H - s.playerY - PADDLE_H;
+          collide(30, ghostY, "player", PADDLE_H);
+        }
+        if (!hitP && !hitA && phP2) {
+          const ghostY = BASE_H - s.aiY - PADDLE_H;
+          collide(BASE_W - 30 - PADDLE_W, ghostY, "ai", PADDLE_H);
+        }
+
 
         // Powerup pickup
         s.powerups = s.powerups.filter(pu => {
