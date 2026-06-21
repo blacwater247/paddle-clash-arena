@@ -32,10 +32,12 @@ export interface RewardsData {
   xp: number;
   wins: number;
   ownedItems: string[];
-  equipped: { paddle: string; ball: string; table: string; victory: string };
+  equipped: { paddle: string; ball: string; table: string; victory: string; super: SuperId };
+  ownedSupers: SuperId[];
   streak: { count: number; lastClaimDate: string | null };
   daily: { date: string; challenge: DailyChallenge } | null;
 }
+
 
 export interface MatchSummary {
   won: boolean;
