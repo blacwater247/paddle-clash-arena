@@ -88,7 +88,7 @@ export function rankFromLevel(level: number) {
 
 // ====== SHOP CATALOG ======
 export const SHOP_ITEMS: ShopItem[] = [
-  // PADDLES
+  // PADDLES — originals
   { id: "paddle:classic",   category: "paddle", name: "Classic Gold",  price: 0,     preview: { a: "#1a1a1a", b: "#FFD700", glow: "#FFD700" } },
   { id: "paddle:lightning", category: "paddle", name: "Lightning",     price: 500,   preview: { a: "#3b1f00", b: "#FCD34D", glow: "#FBBF24" } },
   { id: "paddle:neon",      category: "paddle", name: "Neon Pulse",    price: 1000,  preview: { a: "#082f49", b: "#22D3EE", glow: "#22D3EE" } },
@@ -96,6 +96,11 @@ export const SHOP_ITEMS: ShopItem[] = [
   { id: "paddle:inferno",   category: "paddle", name: "Inferno",       price: 3000,  preview: { a: "#450a0a", b: "#FB923C", glow: "#F97316" } },
   { id: "paddle:galaxy",    category: "paddle", name: "Galaxy",        price: 5000,  rankRequired: 16, preview: { a: "#1e1b4b", b: "#A855F7", glow: "#C084FC" } },
   { id: "paddle:prismatic", category: "paddle", name: "Prismatic",     price: 10000, rankRequired: 21, preview: { a: "#0f172a", b: "#FFFFFF", glow: "#22D3EE" } },
+  // PADDLES — Super Power series
+  { id: "paddle:thunder_strike", category: "paddle", name: "Thunder Strike", price: 2000, preview: { a: "#0a0a0a", b: "#3B82F6", glow: "#60A5FA" } },
+  { id: "paddle:flame_smash",    category: "paddle", name: "Flame Smash",    price: 2500, preview: { a: "#1a0a00", b: "#FB923C", glow: "#F97316" } },
+  { id: "paddle:phantom_curve",  category: "paddle", name: "Phantom Curve",  price: 4000, rankRequired: 11, preview: { a: "#1a0a2e", b: "#C4B5FD", glow: "#A78BFA" } },
+  { id: "paddle:titan_shield",   category: "paddle", name: "Titan Shield",   price: 6000, rankRequired: 16, preview: { a: "#1a1408", b: "#FCD34D", glow: "#FFD700" } },
   // BALL TRAILS
   { id: "ball:default",   category: "ball", name: "Electric Blue", price: 0,    preview: { glow: "#60A5FA" } },
   { id: "ball:fire",      category: "ball", name: "Fireball",      price: 300,  preview: { glow: "#FB923C" } },
@@ -103,7 +108,7 @@ export const SHOP_ITEMS: ShopItem[] = [
   { id: "ball:rainbow",   category: "ball", name: "Rainbow",       price: 1200, preview: { glow: "#F472B6" } },
   { id: "ball:comet",     category: "ball", name: "Comet",         price: 2500, preview: { glow: "#22D3EE" } },
   { id: "ball:void",      category: "ball", name: "Void",          price: 4000, rankRequired: 16, preview: { glow: "#A855F7" } },
-  // TABLES
+  // TABLES — originals
   { id: "table:midnight", category: "table", name: "Midnight Blue", price: 0,    preview: { top: "#0a1a3d", mid: "#0e2a5e", line: "#FFFFFF" } },
   { id: "table:emerald",  category: "table", name: "Emerald Court", price: 800,  preview: { top: "#052e1f", mid: "#064e3b", line: "#FCD34D" } },
   { id: "table:royal",    category: "table", name: "Royal Violet",  price: 1200, preview: { top: "#1e1b4b", mid: "#3730a3", line: "#FDE68A" } },
@@ -111,6 +116,11 @@ export const SHOP_ITEMS: ShopItem[] = [
   { id: "table:sunset",   category: "table", name: "Sunset Arena",  price: 1500, preview: { top: "#3a0a3a", mid: "#7c2d12", line: "#FBBF24" } },
   { id: "table:cyber",    category: "table", name: "Cyber Grid",    price: 2500, preview: { top: "#020617", mid: "#1e293b", line: "#22D3EE" } },
   { id: "table:volcano",  category: "table", name: "Volcano",       price: 3500, rankRequired: 11, preview: { top: "#1c0701", mid: "#7c2d12", line: "#F97316" } },
+  // TABLES — Pro Arena series
+  { id: "table:championship", category: "table", name: "Championship Pro", price: 1800, preview: { top: "#0b1d56", mid: "#1e3a8a", line: "#FFD700" } },
+  { id: "table:neon_thunder", category: "table", name: "Neon Thunder",     price: 2800, rankRequired: 6,  preview: { top: "#020617", mid: "#0a1a3d", line: "#3B82F6" } },
+  { id: "table:inferno_forge",category: "table", name: "Inferno Forge",    price: 4200, rankRequired: 11, preview: { top: "#0a0500", mid: "#3b1a05", line: "#F97316" } },
+  { id: "table:sky_temple",   category: "table", name: "Sky Temple",       price: 5500, rankRequired: 16, preview: { top: "#0b1233", mid: "#1e2a6b", line: "#FCD34D" } },
   // VICTORY FX
   { id: "victory:default",   category: "victory", name: "Gold Flash",       price: 0,    preview: { glow: "#FFD700" } },
   { id: "victory:confetti",  category: "victory", name: "Confetti",         price: 800,  preview: { glow: "#F472B6" } },
