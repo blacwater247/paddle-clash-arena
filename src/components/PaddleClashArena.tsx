@@ -255,11 +255,21 @@ export default function PaddleClashArena() {
     state.current.pickups = 0;
     state.current.maxRally = 0;
     state.current.wasDownBy3 = false;
+    // reset super state for new match
+    state.current.superMeterP1 = 0;
+    state.current.superMeterP2 = 0;
+    state.current.activeSuperP1 = null;
+    state.current.activeSuperP2 = null;
+    state.current.chainOnBall = null;
+    setSuperMeter({ p1: 0, p2: 0 });
+    setSuperBanner(null);
+    setAiTierLabel(state.current.aiParams.tierLabel);
     setScores({ player: 0, ai: 0 });
     setWinner(null);
     setMatchPayout(null);
     setActiveBadges([]);
     resetBall(Math.random() > 0.5 ? 1 : -1);
+
     state.current.running = true;
     state.current.paused = false;
     setScreen("play");
