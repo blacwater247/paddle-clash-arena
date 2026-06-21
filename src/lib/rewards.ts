@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SUPERS, getSuper, type SuperId } from "@/lib/superPowers";
+
 
 // ====== TYPES ======
 export type ItemCategory = "paddle" | "ball" | "table" | "victory";
@@ -30,10 +32,12 @@ export interface RewardsData {
   xp: number;
   wins: number;
   ownedItems: string[];
-  equipped: { paddle: string; ball: string; table: string; victory: string };
+  equipped: { paddle: string; ball: string; table: string; victory: string; super: SuperId };
+  ownedSupers: SuperId[];
   streak: { count: number; lastClaimDate: string | null };
   daily: { date: string; challenge: DailyChallenge } | null;
 }
+
 
 export interface MatchSummary {
   won: boolean;
@@ -168,7 +172,8 @@ export const defaultRewards: RewardsData = {
   xp: 0,
   wins: 0,
   ownedItems: ["paddle:classic", "ball:default", "table:midnight", "victory:default"],
-  equipped: { paddle: "paddle:classic", ball: "ball:default", table: "table:midnight", victory: "victory:default" },
+  equipped: { paddle: "paddle:classic", ball: "ball:default", table: "table:midnight", victory: "victory:default", super: "meteor" },
+  ownedSupers: ["meteor"],
   streak: { count: 0, lastClaimDate: null },
   daily: null,
 };
@@ -179,12 +184,17 @@ export function loadRewards(): RewardsData {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<RewardsData>;
+      const ownedSupers = Array.from(new Set([
+        ...((parsed.ownedSupers ?? []) as SuperId[]),
+        ...defaultRewards.ownedSupers,
+      ]));
       return {
         ...defaultRewards,
         ...parsed,
         equipped: { ...defaultRewards.equipped, ...(parsed.equipped ?? {}) },
         streak: { ...defaultRewards.streak, ...(parsed.streak ?? {}) },
         ownedItems: Array.from(new Set([...(parsed.ownedItems ?? []), ...defaultRewards.ownedItems])),
+        ownedSupers,
       };
     }
     // Migrate from legacy save (wins + paddle + table)
@@ -378,6 +388,40 @@ export function useRewards() {
     return ch.reward;
   }, [data.daily]);
 
+  // ===== SUPER POWERS =====
+  const isSuperOwned = useCallback((id: SuperId): boolean => {
+    const def = getSuper(id);
+    if (def.unlock.type === "free") return true;
+    if (def.unlock.type === "rank") return level >= def.unlock.level;
+    return data.ownedSupers.includes(id);
+  }, [data.ownedSupers, level]);
+
+  const canPurchaseSuper = useCallback((id: SuperId): { ok: boolean; reason?: string } => {
+    const def = getSuper(id);
+    if (def.unlock.type !== "coins") return { ok: false, reason: "Unlocked by rank" };
+    if (data.ownedSupers.includes(id)) return { ok: false, reason: "Owned" };
+    if (data.coins < def.unlock.price) return { ok: false, reason: "Not enough coins" };
+    return { ok: true };
+  }, [data.coins, data.ownedSupers]);
+
+  const purchaseSuper = useCallback((id: SuperId): boolean => {
+    const def = getSuper(id);
+    if (def.unlock.type !== "coins") return false;
+    if (data.ownedSupers.includes(id)) return false;
+    if (data.coins < def.unlock.price) return false;
+    setData(d => ({
+      ...d,
+      coins: d.coins - (def.unlock as { type: "coins"; price: number }).price,
+      ownedSupers: [...d.ownedSupers, id],
+    }));
+    return true;
+  }, [data.coins, data.ownedSupers]);
+
+  const equipSuper = useCallback((id: SuperId) => {
+    if (!isSuperOwned(id)) return;
+    setData(d => ({ ...d, equipped: { ...d.equipped, super: id } }));
+  }, [isSuperOwned]);
+
   const reset = useCallback(() => setData(defaultRewards), []);
 
   return {
@@ -387,6 +431,7 @@ export function useRewards() {
     claimDaily, claimChallenge,
     grantMatchRewards, grantPickup, recordPoint, recordRally,
     isOwned, canPurchase, purchase, equip,
+    isSuperOwned, canPurchaseSuper, purchaseSuper, equipSuper,
     reset,
   };
 }

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRewards, getEquippedPreview, type MatchSummary, type GrantResult, rankFromLevel, levelFromXp } from "@/lib/rewards";
 import { CoinChip, RankBar, DailyRewardModal, ShopScreen, PostMatchPayout } from "@/components/rewards/RewardsUI";
+import { SUPERS, getSuper, superUnlockLabel, METER_MAX, METER_GAIN, type SuperId } from "@/lib/superPowers";
+import { getAIParams, predictBallY, getSkillTier, recordMatchResult, type AIParams } from "@/lib/aiDifficulty";
+
 
 type Screen = "start" | "modes" | "shop" | "settings" | "leaderboard" | "play" | "paused" | "end";
 type Mode = "arcade" | "challenge" | "boss" | "twoplayer";
@@ -69,6 +72,10 @@ export default function PaddleClashArena() {
   const [rally, setRally] = useState(0);
   const [showDaily, setShowDaily] = useState(false);
   const [matchPayout, setMatchPayout] = useState<GrantResult | null>(null);
+  const [superMeter, setSuperMeter] = useState({ p1: 0, p2: 0 });
+  const [aiTierLabel, setAiTierLabel] = useState("");
+  const [superBanner, setSuperBanner] = useState<{ id: SuperId; ts: number } | null>(null);
+
 
   useEffect(() => { persistSettings(settings); }, [settings]);
 
@@ -122,22 +129,35 @@ export default function PaddleClashArena() {
     ballId: "ball:default",
     sfx: true,
     haptics: true,
-    aiSpeed: 6.2,
-    aiJitter: 30,
     winTarget: WIN_SCORE_DEFAULT,
     bossPhase: 0,
     scale: 1,
     pickups: 0,
     startPlayerScore: 0,
     wasDownBy3: false,
+    // ===== Adaptive AI =====
+    skillTier: 0 as -1 | 0 | 1 | 2,
+    aiParams: { reactionDelay: 12, trackingError: 50, maxSpeed: 7, predictionDepth: 0.3, smashChance: 0.1, tierLabel: "NORMAL" } as AIParams,
+    aiTargetBuf: [] as number[], // recent ball Y readings; reaction delay reads from tail
+    aiSmashNext: false,
+    // ===== Super Powers =====
+    superId: "meteor" as SuperId,
+    superMeterP1: 0,
+    superMeterP2: 0,
+    activeSuperP1: null as { id: SuperId; until?: number; pendingHit?: boolean } | null,
+    activeSuperP2: null as { id: SuperId; until?: number; pendingHit?: boolean } | null,
+    chainOnBall: null as null | "player" | "ai", // which player launched the chain shot
   });
+
 
   // Sync rewards equipped + settings into game state
   useEffect(() => {
     state.current.paddleId = rewards.data.equipped.paddle;
     state.current.tableId = rewards.data.equipped.table;
     state.current.ballId = rewards.data.equipped.ball;
+    state.current.superId = rewards.data.equipped.super;
   }, [rewards.data.equipped]);
+
   useEffect(() => {
     state.current.sfx = settings.sfx;
     state.current.haptics = settings.haptics;
@@ -212,11 +232,16 @@ export default function PaddleClashArena() {
   const configureMode = (m: Mode) => {
     const s = state.current;
     s.mode = m;
-    if (m === "arcade")    { s.aiSpeed = 6.2; s.aiJitter = 30; s.winTarget = 7; }
-    if (m === "challenge") { s.aiSpeed = 8.2; s.aiJitter = 14; s.winTarget = 9; }
-    if (m === "boss")      { s.aiSpeed = 9.5; s.aiJitter = 8;  s.winTarget = 11; s.bossPhase = 0; }
-    if (m === "twoplayer") { s.aiSpeed = 0;   s.aiJitter = 0;  s.winTarget = 7; }
+    if (m === "arcade")    { s.winTarget = 7; }
+    if (m === "challenge") { s.winTarget = 9; }
+    if (m === "boss")      { s.winTarget = 11; s.bossPhase = 0; }
+    if (m === "twoplayer") { s.winTarget = 7; }
+    s.skillTier = getSkillTier();
+    s.aiParams = getAIParams(m, 0, 0, s.winTarget, s.skillTier);
+    s.aiTargetBuf = [];
+    s.aiSmashNext = false;
   };
+
 
   const startGame = useCallback((m: Mode) => {
     configureMode(m);
@@ -230,11 +255,21 @@ export default function PaddleClashArena() {
     state.current.pickups = 0;
     state.current.maxRally = 0;
     state.current.wasDownBy3 = false;
+    // reset super state for new match
+    state.current.superMeterP1 = 0;
+    state.current.superMeterP2 = 0;
+    state.current.activeSuperP1 = null;
+    state.current.activeSuperP2 = null;
+    state.current.chainOnBall = null;
+    setSuperMeter({ p1: 0, p2: 0 });
+    setSuperBanner(null);
+    setAiTierLabel(state.current.aiParams.tierLabel);
     setScores({ player: 0, ai: 0 });
     setWinner(null);
     setMatchPayout(null);
     setActiveBadges([]);
     resetBall(Math.random() > 0.5 ? 1 : -1);
+
     state.current.running = true;
     state.current.paused = false;
     setScreen("play");
@@ -273,6 +308,34 @@ export default function PaddleClashArena() {
     }
   };
 
+  // ===== Super activation =====
+  const activateSuper = useCallback((player: "p1" | "p2") => {
+    const s = state.current;
+    if (!s.running || s.paused) return;
+    const meterKey = player === "p1" ? "superMeterP1" : "superMeterP2";
+    const activeKey = player === "p1" ? "activeSuperP1" : "activeSuperP2";
+    if (s[meterKey] < METER_MAX) return;
+    if (s[activeKey]) return;
+    const def = getSuper(s.superId);
+    s[meterKey] = 0;
+    setSuperMeter({ p1: s.superMeterP1, p2: s.superMeterP2 });
+
+    if (def.id === "meteor" || def.id === "chain") {
+      s[activeKey] = { id: def.id, pendingHit: true };
+    } else {
+      s[activeKey] = { id: def.id, until: performance.now() + def.durationMs };
+    }
+    s.flash = 26; s.flashColor = def.color;
+    s.shake = 10;
+    spawnHitParticles(player === "p1" ? 60 : BASE_W - 60, BASE_H / 2, def.color, 36);
+    beep(900, 0.12, "triangle", 0.22);
+    beep(1400, 0.10, "triangle", 0.18);
+    haptic(30);
+    setSuperBanner({ id: def.id, ts: performance.now() });
+    setTimeout(() => setSuperBanner(null), 1500);
+  }, [beep]);
+
+
   // Input
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -288,7 +351,12 @@ export default function PaddleClashArena() {
       if (k === "Escape" || k === "p" || k === "P") {
         if (screen === "play" || screen === "paused") togglePause();
       }
+      if (screen === "play") {
+        if (k === " " || k === "Spacebar") { e.preventDefault(); activateSuper("p1"); }
+        if (k === "Enter" && state.current.mode === "twoplayer") { e.preventDefault(); activateSuper("p2"); }
+      }
     };
+
     const onKeyUp = (e: KeyboardEvent) => {
       const k = e.key;
       if (k === "ArrowUp") state.current.keys.up = false;
@@ -302,7 +370,7 @@ export default function PaddleClashArena() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [screen]);
+  }, [screen, activateSuper]);
 
   // Game loop
   useEffect(() => {
@@ -325,8 +393,9 @@ export default function PaddleClashArena() {
     const ro = new ResizeObserver(resize);
     if (containerRef.current) ro.observe(containerRef.current);
 
-    const drawPaddle = (x: number, y: number, paddleId: string, variant: "player" | "ai", shielded: boolean) => {
+    const drawPaddle = (x: number, y: number, paddleId: string, variant: "player" | "ai", shielded: boolean, h: number = PADDLE_H, alpha: number = 1) => {
       ctx.save();
+      ctx.globalAlpha = alpha;
       const skin = getEquippedPreview(paddleId, "paddle:classic");
       const a = variant === "ai" ? "#3b0a0a" : (skin.a ?? "#1a1a1a");
       const b = variant === "ai" ? "#E5E7EB" : (skin.b ?? "#FFD700");
@@ -335,23 +404,24 @@ export default function PaddleClashArena() {
       const grad = ctx.createLinearGradient(x, y, x + PADDLE_W, y);
       grad.addColorStop(0, a); grad.addColorStop(1, b);
       ctx.fillStyle = grad;
-      ctx.beginPath(); ctx.roundRect(x, y, PADDLE_W, PADDLE_H, 7); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(x, y, PADDLE_W, h, 7); ctx.fill();
       ctx.shadowBlur = 0;
       ctx.strokeStyle = glow; ctx.lineWidth = 1.5; ctx.stroke();
       ctx.fillStyle = glow;
-      ctx.globalAlpha = 0.55;
-      ctx.fillRect(x + PADDLE_W / 2 - 1, y + 8, 2, PADDLE_H - 16);
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = alpha * 0.55;
+      ctx.fillRect(x + PADDLE_W / 2 - 1, y + 8, 2, h - 16);
+      ctx.globalAlpha = alpha;
       if (shielded) {
         ctx.strokeStyle = POWER_COLORS.shield;
         ctx.lineWidth = 3;
         ctx.shadowColor = POWER_COLORS.shield; ctx.shadowBlur = 18;
         ctx.beginPath();
-        ctx.roundRect(x - 6, y - 6, PADDLE_W + 12, PADDLE_H + 12, 12);
+        ctx.roundRect(x - 6, y - 6, PADDLE_W + 12, h + 12, 12);
         ctx.stroke();
       }
       ctx.restore();
     };
+
 
     const endMatch = (w: Winner) => {
       const s = state.current;
@@ -372,9 +442,12 @@ export default function PaddleClashArena() {
       if (s.mode !== "twoplayer") {
         const result = rewardsRef.current.grantMatchRewards(summary);
         setMatchPayout(result);
+        // Update rolling player-skill tier (affects future matches)
+        recordMatchResult(w === "player");
       } else {
         setMatchPayout(null);
       }
+
       // Leaderboard entry (only for solo wins)
       if (w === "player" && s.mode !== "twoplayer") {
         setSettings(prev => {
@@ -421,12 +494,30 @@ export default function PaddleClashArena() {
           if (s.keys.up2) s.aiY -= PADDLE_SPEED;
           if (s.keys.down2) s.aiY += PADDLE_SPEED;
         } else {
+          // Adaptive AI: refresh params each frame so curve responds to score
+          s.aiParams = getAIParams(s.mode, s.scores.player, s.scores.ai, s.winTarget, s.skillTier);
+          const ap = s.aiParams;
+
+          // Track ball with reaction delay buffer
+          s.aiTargetBuf.push(s.ballY);
+          if (s.aiTargetBuf.length > 60) s.aiTargetBuf.shift();
+          const delayedBallY = s.aiTargetBuf[Math.max(0, s.aiTargetBuf.length - 1 - ap.reactionDelay)] ?? s.ballY;
+
+          // Blend current vs predicted intercept
+          const predicted = predictBallY(s.ballX, delayedBallY, s.ballVX, s.ballVY, BASE_W - 30 - PADDLE_W, BASE_H, BALL_R);
+          const blendedTarget = delayedBallY * (1 - ap.predictionDepth) + predicted * ap.predictionDepth;
+          const target = blendedTarget + (Math.random() - 0.5) * ap.trackingError;
+
           const aiCenter = s.aiY + PADDLE_H / 2;
-          const target = s.ballY + (Math.random() - 0.5) * s.aiJitter;
           const diff = target - aiCenter;
-          const move = Math.max(-s.aiSpeed, Math.min(s.aiSpeed, diff * 0.14));
-          s.aiY += move * dtScale;
+          const move = Math.max(-ap.maxSpeed, Math.min(ap.maxSpeed, diff * 0.18));
+          // Time Warp slows opponent (AI)
+          const nowTW = performance.now();
+          const twP1 = s.activeSuperP1?.id === "timewarp" && (s.activeSuperP1.until ?? 0) > nowTW;
+          s.aiY += move * dtScale * (twP1 ? 0.45 : 1);
         }
+
+
         s.aiY = Math.max(0, Math.min(BASE_H - PADDLE_H, s.aiY));
 
         const playerEff = s.effects.find(e => e.owner === "player");
@@ -435,7 +526,18 @@ export default function PaddleClashArena() {
           s.ballVY += s.ballSpin * 0.06;
         }
         const slowActive = s.effects.some(e => e.kind === "slow");
-        const effectiveDt = slowActive ? 0.55 : dtScale;
+
+        // ===== Super: Time Warp (slows ball + opponent) =====
+        const nowTs = performance.now();
+        const tw1 = s.activeSuperP1?.id === "timewarp" && (s.activeSuperP1.until ?? 0) > nowTs;
+        const tw2 = s.activeSuperP2?.id === "timewarp" && (s.activeSuperP2.until ?? 0) > nowTs;
+        const ballSlowFactor = (tw1 || tw2) ? 0.45 : (slowActive ? 0.55 : 1);
+        const effectiveDt = ballSlowFactor < 1 ? dtScale * ballSlowFactor : dtScale;
+
+        // ===== Super: Chain Lightning (ball zig-zag while in flight) =====
+        if (s.chainOnBall) {
+          s.ballVY += Math.sin(tms * 0.018) * 1.1;
+        }
 
         s.ballX += s.ballVX * effectiveDt;
         s.ballY += s.ballVY * effectiveDt;
@@ -443,16 +545,35 @@ export default function PaddleClashArena() {
         if (s.ballY - BALL_R < 0) { s.ballY = BALL_R; s.ballVY = -s.ballVY; beep(440, 0.04, "square", 0.07); }
         if (s.ballY + BALL_R > BASE_H) { s.ballY = BASE_H - BALL_R; s.ballVY = -s.ballVY; beep(440, 0.04, "square", 0.07); }
 
-        const collide = (paddleX: number, paddleY: number, side: "player" | "ai") => {
+        // Mirror Wall: paddle height multiplier
+        const mirrorP1 = s.activeSuperP1?.id === "mirror" && (s.activeSuperP1.until ?? 0) > nowTs;
+        const mirrorP2 = s.activeSuperP2?.id === "mirror" && (s.activeSuperP2.until ?? 0) > nowTs;
+        const playerH = mirrorP1 ? PADDLE_H * 2 : PADDLE_H;
+        const aiH = (s.mode === "twoplayer" && mirrorP2) ? PADDLE_H * 2 : PADDLE_H;
+
+        const collide = (paddleX: number, paddleY: number, side: "player" | "ai", pH: number) => {
           const isPlayer = side === "player";
           const dirIn = isPlayer ? s.ballVX < 0 : s.ballVX > 0;
           const xCond = isPlayer
             ? (s.ballX - BALL_R < paddleX + PADDLE_W && s.ballX - BALL_R > paddleX - 6)
             : (s.ballX + BALL_R > paddleX && s.ballX + BALL_R < paddleX + PADDLE_W + 6);
           if (!dirIn || !xCond) return false;
-          if (s.ballY < paddleY || s.ballY > paddleY + PADDLE_H) return false;
+          if (s.ballY < paddleY || s.ballY > paddleY + pH) return false;
 
-          const hit = (s.ballY - (paddleY + PADDLE_H / 2)) / (PADDLE_H / 2);
+          // Chain Lightning pierce
+          if (s.chainOnBall === "player" && side === "ai") {
+            s.chainOnBall = null;
+            spawnHitParticles(s.ballX, s.ballY, "#FACC15", 24);
+            beep(1200, 0.08, "sawtooth", 0.2);
+            return false;
+          }
+          if (s.chainOnBall === "ai" && side === "player") {
+            s.chainOnBall = null;
+            spawnHitParticles(s.ballX, s.ballY, "#FACC15", 24);
+            return false;
+          }
+
+          const hit = (s.ballY - (paddleY + pH / 2)) / (pH / 2);
           let speed = Math.min(BALL_MAX_SPEED, Math.hypot(s.ballVX, s.ballVY) * 1.08);
           const eff = s.effects.find(e => e.owner === side);
           if (eff?.kind === "smash") {
@@ -463,22 +584,55 @@ export default function PaddleClashArena() {
           if (eff?.kind === "curve") s.ballSpin = hit * 4;
           else s.ballSpin = 0;
 
+          // Super: Meteor Smash / Chain on next hit
+          const sup = isPlayer ? s.activeSuperP1 : (s.mode === "twoplayer" ? s.activeSuperP2 : null);
+          let superTriggered: SuperId | null = null;
+          if (sup?.pendingHit && sup.id === "meteor") {
+            speed = Math.min(BALL_MAX_SPEED + 8, speed * 2.5);
+            s.ballFire = true;
+            s.smashFor = side;
+            s.shake = 22;
+            superTriggered = "meteor";
+            if (isPlayer) s.activeSuperP1 = null; else s.activeSuperP2 = null;
+          }
+          if (sup?.pendingHit && sup.id === "chain") {
+            speed = Math.min(BALL_MAX_SPEED + 4, speed * 1.4);
+            s.chainOnBall = side;
+            superTriggered = "chain";
+            if (isPlayer) s.activeSuperP1 = null; else s.activeSuperP2 = null;
+          }
+
+          // AI smash from adaptive difficulty
+          if (side === "ai" && s.mode !== "twoplayer" && Math.random() < s.aiParams.smashChance) {
+            speed = Math.min(BALL_MAX_SPEED + 2, speed * 1.35);
+          }
+
           const angle = isPlayer ? hit * 0.95 : Math.PI - hit * 0.95;
           s.ballVX = Math.cos(angle) * speed;
           s.ballVY = Math.sin(angle) * speed;
           s.ballX = isPlayer ? paddleX + PADDLE_W + BALL_R : paddleX - BALL_R;
-          s.shake = Math.min(14, speed * 0.7);
+          s.shake = Math.max(s.shake, Math.min(20, speed * 0.7));
 
           const skinPreview = getEquippedPreview(s.paddleId, "paddle:classic");
           const col = isPlayer ? (skinPreview.glow ?? "#FFD700") : "#F87171";
-          spawnHitParticles(s.ballX, s.ballY, col, eff?.kind === "smash" ? 28 : 16);
-          if (eff?.kind === "smash") spawnSparkLine(s.ballX, s.ballY, "#FFD700");
+          const particleCount = superTriggered === "meteor" ? 40 : (eff?.kind === "smash" ? 28 : 16);
+          spawnHitParticles(s.ballX, s.ballY, superTriggered === "chain" ? "#FACC15" : col, particleCount);
+          if (eff?.kind === "smash" || superTriggered === "meteor") spawnSparkLine(s.ballX, s.ballY, "#FFD700");
           beep(580 + Math.abs(hit) * 220, 0.06, "square", 0.18);
-          haptic(eff?.kind === "smash" ? 24 : 10);
+          haptic(superTriggered ? 30 : (eff?.kind === "smash" ? 24 : 10));
 
           if (eff && (eff.kind === "smash" || eff.kind === "curve")) {
             s.effects = s.effects.filter(e => e !== eff);
           }
+
+          // Super meter gain on rally hit
+          if (s.mode !== "twoplayer") {
+            if (isPlayer) s.superMeterP1 = Math.min(METER_MAX, s.superMeterP1 + METER_GAIN.rallyHit);
+          } else {
+            if (isPlayer) s.superMeterP1 = Math.min(METER_MAX, s.superMeterP1 + METER_GAIN.rallyHit);
+            else          s.superMeterP2 = Math.min(METER_MAX, s.superMeterP2 + METER_GAIN.rallyHit);
+          }
+
           s.rally += 1;
           if (s.rally > s.maxRally) {
             s.maxRally = s.rally;
@@ -488,8 +642,21 @@ export default function PaddleClashArena() {
           return true;
         };
 
-        const hitP = collide(30, s.playerY, "player");
-        const hitA = !hitP && collide(BASE_W - 30 - PADDLE_W, s.aiY, "ai");
+        const hitP = collide(30, s.playerY, "player", playerH);
+        const hitA = !hitP && collide(BASE_W - 30 - PADDLE_W, s.aiY, "ai", aiH);
+
+        // Phantom Clone: mirror ghost paddle
+        const phP1 = s.activeSuperP1?.id === "phantom" && (s.activeSuperP1.until ?? 0) > nowTs;
+        const phP2 = s.mode === "twoplayer" && s.activeSuperP2?.id === "phantom" && (s.activeSuperP2.until ?? 0) > nowTs;
+        if (!hitP && !hitA && phP1) {
+          const ghostY = BASE_H - s.playerY - PADDLE_H;
+          collide(30, ghostY, "player", PADDLE_H);
+        }
+        if (!hitP && !hitA && phP2) {
+          const ghostY = BASE_H - s.aiY - PADDLE_H;
+          collide(BASE_W - 30 - PADDLE_W, ghostY, "ai", PADDLE_H);
+        }
+
 
         // Powerup pickup
         s.powerups = s.powerups.filter(pu => {
@@ -506,8 +673,13 @@ export default function PaddleClashArena() {
             if (owner === "player" && s.mode !== "twoplayer") {
               s.pickups += 1;
               rewardsRef.current.grantPickup();
+              s.superMeterP1 = Math.min(METER_MAX, s.superMeterP1 + METER_GAIN.pickup);
+            } else if (s.mode === "twoplayer") {
+              if (owner === "player") s.superMeterP1 = Math.min(METER_MAX, s.superMeterP1 + METER_GAIN.pickup);
+              else                    s.superMeterP2 = Math.min(METER_MAX, s.superMeterP2 + METER_GAIN.pickup);
             }
             return false;
+
           }
           return true;
         });
@@ -546,6 +718,9 @@ export default function PaddleClashArena() {
             s.flash = 32; s.flashColor = "#EF4444";
             beep(180, 0.3, "sawtooth", 0.2);
             haptic(30);
+            // Meter: player lost a point → catch-up gain
+            s.superMeterP1 = Math.min(METER_MAX, s.superMeterP1 + METER_GAIN.pointLost);
+            if (s.mode === "twoplayer") s.superMeterP2 = Math.min(METER_MAX, s.superMeterP2 + METER_GAIN.pointWon);
             if (s.scores.ai - s.scores.player >= 3) s.wasDownBy3 = true;
             if (s.scores.ai >= s.winTarget) endMatch("ai");
             else resetBall(1);
@@ -565,11 +740,15 @@ export default function PaddleClashArena() {
             beep(880, 0.22, "triangle", 0.22);
             beep(1320, 0.16, "triangle", 0.18);
             haptic(20);
+            // Meter: point won
+            s.superMeterP1 = Math.min(METER_MAX, s.superMeterP1 + METER_GAIN.pointWon);
+            if (s.mode === "twoplayer") s.superMeterP2 = Math.min(METER_MAX, s.superMeterP2 + METER_GAIN.pointLost);
             if (s.mode !== "twoplayer") rewardsRef.current.recordPoint();
             if (s.scores.player >= s.winTarget) endMatch("player");
             else resetBall(-1);
           }
         }
+
 
         s.trail.push({ x: s.ballX, y: s.ballY });
         if (s.trail.length > 22) s.trail.shift();
@@ -589,7 +768,17 @@ export default function PaddleClashArena() {
         if (s.shake > 0) s.shake *= 0.85;
         if (s.flash > 0) s.flash -= 1;
         s.netWave += 0.05;
+
+        // Sync super meter / AI tier label to component state (cheap throttle every ~6 frames)
+        if ((tms | 0) % 6 === 0) {
+          setSuperMeter(prev => {
+            if (prev.p1 === s.superMeterP1 && prev.p2 === s.superMeterP2) return prev;
+            return { p1: s.superMeterP1, p2: s.superMeterP2 };
+          });
+          setAiTierLabel(prev => prev === s.aiParams.tierLabel ? prev : s.aiParams.tierLabel);
+        }
       }
+
 
       // ====== Draw ======
       ctx.save();
@@ -674,8 +863,20 @@ export default function PaddleClashArena() {
 
       const playerShield = s.effects.some(e => e.owner === "player" && e.kind === "shield");
       const aiShield = s.effects.some(e => e.owner === "ai" && e.kind === "shield");
-      drawPaddle(30, s.playerY, s.paddleId, "player", playerShield);
-      drawPaddle(BASE_W - 30 - PADDLE_W, s.aiY, s.paddleId, "ai", aiShield);
+      const nowDr = performance.now();
+      const drMirrorP1 = s.activeSuperP1?.id === "mirror" && (s.activeSuperP1.until ?? 0) > nowDr;
+      const drMirrorP2 = s.mode === "twoplayer" && s.activeSuperP2?.id === "mirror" && (s.activeSuperP2.until ?? 0) > nowDr;
+      const drPhantomP1 = s.activeSuperP1?.id === "phantom" && (s.activeSuperP1.until ?? 0) > nowDr;
+      const drPhantomP2 = s.mode === "twoplayer" && s.activeSuperP2?.id === "phantom" && (s.activeSuperP2.until ?? 0) > nowDr;
+      drawPaddle(30, s.playerY, s.paddleId, "player", playerShield, drMirrorP1 ? PADDLE_H * 2 : PADDLE_H);
+      drawPaddle(BASE_W - 30 - PADDLE_W, s.aiY, s.paddleId, "ai", aiShield, drMirrorP2 ? PADDLE_H * 2 : PADDLE_H);
+      if (drPhantomP1) {
+        drawPaddle(30, BASE_H - s.playerY - PADDLE_H, s.paddleId, "player", false, PADDLE_H, 0.45);
+      }
+      if (drPhantomP2) {
+        drawPaddle(BASE_W - 30 - PADDLE_W, BASE_H - s.aiY - PADDLE_H, s.paddleId, "ai", false, PADDLE_H, 0.45);
+      }
+
 
       ctx.save();
       const ballColor = s.ballFire ? "#FBBF24" : (ballSkin.glow ?? "#60A5FA");
@@ -765,6 +966,12 @@ export default function PaddleClashArena() {
                 </span>
               ))}
             </div>
+            <SuperMeterButton
+              value={superMeter.p1}
+              superId={rewards.data.equipped.super}
+              onActivate={() => activateSuper("p1")}
+              label="SPACE"
+            />
           </div>
           <div className="flex flex-col items-center pt-1">
             <span className="text-[9px] tracking-[0.3em] text-muted-foreground sm:text-[10px]">
@@ -779,6 +986,14 @@ export default function PaddleClashArena() {
             {rally > 2 && (
               <span className="mt-1 text-[10px] font-bold tracking-[0.2em] text-[oklch(0.82_0.17_85)]">
                 RALLY × {rally}
+              </span>
+            )}
+            {mode !== "twoplayer" && aiTierLabel && (
+              <span
+                key={aiTierLabel}
+                className="mt-1 rounded-full border border-[oklch(0.7_0.22_245/0.5)] bg-[oklch(0.7_0.22_245/0.12)] px-2 py-0.5 text-[9px] font-black tracking-[0.3em] text-[oklch(0.7_0.22_245)] animate-fade-in"
+              >
+                AI · {aiTierLabel}
               </span>
             )}
             {mode !== "twoplayer" && (
@@ -799,9 +1014,24 @@ export default function PaddleClashArena() {
                 </span>
               ))}
             </div>
+            {mode === "twoplayer" && (
+              <SuperMeterButton
+                value={superMeter.p2}
+                superId={rewards.data.equipped.super}
+                onActivate={() => activateSuper("p2")}
+                label="ENTER"
+                align="end"
+              />
+            )}
           </div>
         </div>
       )}
+
+      {/* Super Activation Banner */}
+      {superBanner && (screen === "play" || screen === "paused") && (
+        <SuperBanner id={superBanner.id} key={superBanner.ts} />
+      )}
+
 
       {(screen === "play" || screen === "paused") && (
         <div className="absolute right-3 bottom-3 z-30 flex gap-2 sm:right-6 sm:bottom-6">
@@ -851,6 +1081,11 @@ export default function PaddleClashArena() {
           <div className="mt-6">
             <RankBar r={rewards} />
           </div>
+
+          <div className="mt-6 w-full max-w-md">
+            <SuperPicker r={rewards} />
+          </div>
+
 
           <div className="mt-6 flex flex-col gap-3 sm:gap-4">
             <button onClick={() => setScreen("modes")} className="btn-arcade text-base sm:text-lg">Play</button>
@@ -1104,3 +1339,109 @@ function AnimatedNumber({ value, className }: { value: number; className?: strin
   }, [value]);
   return <span className={`${className ?? ""} inline-block transition-transform ${pop ? "scale-125" : "scale-100"}`}>{value}</span>;
 }
+
+// ===== Super HUD components =====
+function SuperMeterButton({
+  value, superId, onActivate, label, align = "start",
+}: {
+  value: number; superId: SuperId; onActivate: () => void; label: string; align?: "start" | "end";
+}) {
+  const def = getSuper(superId);
+  const ready = value >= METER_MAX;
+  const pct = Math.min(100, (value / METER_MAX) * 100);
+  return (
+    <button
+      onClick={onActivate}
+      disabled={!ready}
+      className={`pointer-events-auto mt-2 flex items-center gap-2 rounded-md border px-2 py-1 backdrop-blur transition ${
+        ready
+          ? "border-[color:var(--super-c)] bg-[color:var(--super-c)]/15 shadow-[0_0_18px_color-mix(in_oklab,var(--super-c)_60%,transparent)] animate-pulse"
+          : "border-border bg-card/50 opacity-80"
+      } ${align === "end" ? "flex-row-reverse" : ""}`}
+      style={{ ["--super-c" as string]: def.color }}
+      aria-label={`Activate ${def.name}`}
+    >
+      <span className="text-base leading-none" style={{ color: def.color, textShadow: ready ? `0 0 10px ${def.color}` : undefined }}>
+        {def.glyph}
+      </span>
+      <div className="flex flex-col">
+        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted sm:w-24">
+          <div className="h-full transition-all" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${def.color}, #FFD700)` }} />
+        </div>
+        <span className="mt-0.5 text-[8px] tracking-[0.25em] text-muted-foreground">
+          {ready ? `READY · ${label}` : def.short.toUpperCase()}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+function SuperBanner({ id }: { id: SuperId }) {
+  const def = getSuper(id);
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-1/3 z-40 flex justify-center">
+      <div
+        className="rounded-xl border-2 px-6 py-3 backdrop-blur-md animate-fade-in"
+        style={{
+          borderColor: def.color,
+          background: `${def.color}22`,
+          boxShadow: `0 0 48px ${def.color}88`,
+        }}
+      >
+        <p className="text-center text-[10px] tracking-[0.5em]" style={{ color: def.color }}>SUPER POWER</p>
+        <p className="text-center text-3xl font-black uppercase tracking-[0.18em] text-foreground sm:text-4xl"
+           style={{ textShadow: `0 0 18px ${def.color}` }}>
+          {def.glyph} {def.name}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SuperPicker({ r }: { r: ReturnType<typeof useRewards> }) {
+  const equipped = r.data.equipped.super;
+  return (
+    <div className="flex flex-col items-center">
+      <p className="mb-2 text-[10px] tracking-[0.4em] text-muted-foreground">SUPER POWER</p>
+      <div className="grid w-full grid-cols-5 gap-2">
+        {SUPERS.map(def => {
+          const owned = r.isSuperOwned(def.id);
+          const isEquipped = equipped === def.id;
+          const canBuy = def.unlock.type === "coins" && r.canPurchaseSuper(def.id).ok;
+          const click = () => {
+            if (owned) r.equipSuper(def.id);
+            else if (canBuy) r.purchaseSuper(def.id);
+          };
+          return (
+            <button
+              key={def.id}
+              onClick={click}
+              disabled={!owned && !canBuy}
+              className={`group relative flex flex-col items-center rounded-lg border p-2 transition ${
+                isEquipped
+                  ? "border-[color:var(--c)] bg-[color:var(--c)]/15 shadow-[0_0_18px_color-mix(in_oklab,var(--c)_50%,transparent)]"
+                  : owned
+                    ? "border-border bg-card/50 hover:border-[color:var(--c)]"
+                    : "border-border bg-card/20 opacity-60"
+              }`}
+              style={{ ["--c" as string]: def.color }}
+              title={def.desc}
+            >
+              <span className="text-xl leading-none" style={{ color: def.color, textShadow: owned ? `0 0 10px ${def.color}` : undefined }}>
+                {def.glyph}
+              </span>
+              <span className="mt-1 text-[9px] font-black tracking-wider text-foreground">{def.short.toUpperCase()}</span>
+              <span className="text-[8px] tracking-wider text-muted-foreground">
+                {isEquipped ? "EQUIPPED" : owned ? "EQUIP" : superUnlockLabel(def)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-center text-[9px] text-muted-foreground">
+        Tap to {SUPERS.some(s => !r.isSuperOwned(s.id)) ? "equip / buy" : "equip"} · Activate in-game with SPACE
+      </p>
+    </div>
+  );
+}
+
