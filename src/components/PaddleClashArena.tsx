@@ -169,7 +169,7 @@ export default function PaddleClashArena() {
 
   // Audio
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const musicNodesRef = useRef<{ osc: OscillatorNode; gain: GainNode; interval: number } | null>(null);
+  
   const getAudio = () => {
     if (!audioCtxRef.current && typeof window !== "undefined") {
       const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
