@@ -860,8 +860,20 @@ export default function PaddleClashArena() {
 
       const playerShield = s.effects.some(e => e.owner === "player" && e.kind === "shield");
       const aiShield = s.effects.some(e => e.owner === "ai" && e.kind === "shield");
-      drawPaddle(30, s.playerY, s.paddleId, "player", playerShield);
-      drawPaddle(BASE_W - 30 - PADDLE_W, s.aiY, s.paddleId, "ai", aiShield);
+      const nowDr = performance.now();
+      const drMirrorP1 = s.activeSuperP1?.id === "mirror" && (s.activeSuperP1.until ?? 0) > nowDr;
+      const drMirrorP2 = s.mode === "twoplayer" && s.activeSuperP2?.id === "mirror" && (s.activeSuperP2.until ?? 0) > nowDr;
+      const drPhantomP1 = s.activeSuperP1?.id === "phantom" && (s.activeSuperP1.until ?? 0) > nowDr;
+      const drPhantomP2 = s.mode === "twoplayer" && s.activeSuperP2?.id === "phantom" && (s.activeSuperP2.until ?? 0) > nowDr;
+      drawPaddle(30, s.playerY, s.paddleId, "player", playerShield, drMirrorP1 ? PADDLE_H * 2 : PADDLE_H);
+      drawPaddle(BASE_W - 30 - PADDLE_W, s.aiY, s.paddleId, "ai", aiShield, drMirrorP2 ? PADDLE_H * 2 : PADDLE_H);
+      if (drPhantomP1) {
+        drawPaddle(30, BASE_H - s.playerY - PADDLE_H, s.paddleId, "player", false, PADDLE_H, 0.45);
+      }
+      if (drPhantomP2) {
+        drawPaddle(BASE_W - 30 - PADDLE_W, BASE_H - s.aiY - PADDLE_H, s.paddleId, "ai", false, PADDLE_H, 0.45);
+      }
+
 
       ctx.save();
       const ballColor = s.ballFire ? "#FBBF24" : (ballSkin.glow ?? "#60A5FA");
