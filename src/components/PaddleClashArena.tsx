@@ -226,11 +226,16 @@ export default function PaddleClashArena() {
   const configureMode = (m: Mode) => {
     const s = state.current;
     s.mode = m;
-    if (m === "arcade")    { s.aiSpeed = 6.2; s.aiJitter = 30; s.winTarget = 7; }
-    if (m === "challenge") { s.aiSpeed = 8.2; s.aiJitter = 14; s.winTarget = 9; }
-    if (m === "boss")      { s.aiSpeed = 9.5; s.aiJitter = 8;  s.winTarget = 11; s.bossPhase = 0; }
-    if (m === "twoplayer") { s.aiSpeed = 0;   s.aiJitter = 0;  s.winTarget = 7; }
+    if (m === "arcade")    { s.winTarget = 7; }
+    if (m === "challenge") { s.winTarget = 9; }
+    if (m === "boss")      { s.winTarget = 11; s.bossPhase = 0; }
+    if (m === "twoplayer") { s.winTarget = 7; }
+    s.skillTier = getSkillTier();
+    s.aiParams = getAIParams(m, 0, 0, s.winTarget, s.skillTier);
+    s.aiTargetBuf = [];
+    s.aiSmashNext = false;
   };
+
 
   const startGame = useCallback((m: Mode) => {
     configureMode(m);
