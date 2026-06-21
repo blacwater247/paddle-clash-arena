@@ -393,8 +393,9 @@ export default function PaddleClashArena() {
     const ro = new ResizeObserver(resize);
     if (containerRef.current) ro.observe(containerRef.current);
 
-    const drawPaddle = (x: number, y: number, paddleId: string, variant: "player" | "ai", shielded: boolean) => {
+    const drawPaddle = (x: number, y: number, paddleId: string, variant: "player" | "ai", shielded: boolean, h: number = PADDLE_H, alpha: number = 1) => {
       ctx.save();
+      ctx.globalAlpha = alpha;
       const skin = getEquippedPreview(paddleId, "paddle:classic");
       const a = variant === "ai" ? "#3b0a0a" : (skin.a ?? "#1a1a1a");
       const b = variant === "ai" ? "#E5E7EB" : (skin.b ?? "#FFD700");
@@ -403,23 +404,24 @@ export default function PaddleClashArena() {
       const grad = ctx.createLinearGradient(x, y, x + PADDLE_W, y);
       grad.addColorStop(0, a); grad.addColorStop(1, b);
       ctx.fillStyle = grad;
-      ctx.beginPath(); ctx.roundRect(x, y, PADDLE_W, PADDLE_H, 7); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(x, y, PADDLE_W, h, 7); ctx.fill();
       ctx.shadowBlur = 0;
       ctx.strokeStyle = glow; ctx.lineWidth = 1.5; ctx.stroke();
       ctx.fillStyle = glow;
-      ctx.globalAlpha = 0.55;
-      ctx.fillRect(x + PADDLE_W / 2 - 1, y + 8, 2, PADDLE_H - 16);
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = alpha * 0.55;
+      ctx.fillRect(x + PADDLE_W / 2 - 1, y + 8, 2, h - 16);
+      ctx.globalAlpha = alpha;
       if (shielded) {
         ctx.strokeStyle = POWER_COLORS.shield;
         ctx.lineWidth = 3;
         ctx.shadowColor = POWER_COLORS.shield; ctx.shadowBlur = 18;
         ctx.beginPath();
-        ctx.roundRect(x - 6, y - 6, PADDLE_W + 12, PADDLE_H + 12, 12);
+        ctx.roundRect(x - 6, y - 6, PADDLE_W + 12, h + 12, 12);
         ctx.stroke();
       }
       ctx.restore();
     };
+
 
     const endMatch = (w: Winner) => {
       const s = state.current;
