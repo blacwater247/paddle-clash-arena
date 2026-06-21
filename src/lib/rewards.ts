@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SUPERS, getSuper, type SuperId } from "@/lib/superPowers";
+
 
 // ====== TYPES ======
 export type ItemCategory = "paddle" | "ball" | "table" | "victory";
