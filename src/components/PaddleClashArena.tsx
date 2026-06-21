@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useRewards, getEquippedPreview, type MatchSummary, type GrantResult, rankFromLevel, levelFromXp } from "@/lib/rewards";
 import { CoinChip, RankBar, DailyRewardModal, ShopScreen, PostMatchPayout } from "@/components/rewards/RewardsUI";
 import { SUPERS, getSuper, superUnlockLabel, METER_MAX, METER_GAIN, type SuperId } from "@/lib/superPowers";
@@ -1082,6 +1083,16 @@ export default function PaddleClashArena() {
       {/* ===== START ===== */}
       {screen === "start" && (
         <Overlay>
+          {/* Top-left back to landing */}
+          <div className="absolute left-4 top-4 sm:left-8 sm:top-6">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-card/60 px-3 py-2 text-xs font-bold tracking-widest uppercase text-foreground backdrop-blur transition hover:border-cyan-400/40 hover:bg-card"
+            >
+              ← Back
+            </Link>
+          </div>
+
           {/* Top-right coin chip */}
           <div className="absolute right-4 top-4 sm:right-8 sm:top-6">
             <CoinChip coins={rewards.coins} />
