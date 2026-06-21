@@ -3,6 +3,7 @@ import { useRewards, getEquippedPreview, type MatchSummary, type GrantResult, ra
 import { CoinChip, RankBar, DailyRewardModal, ShopScreen, PostMatchPayout } from "@/components/rewards/RewardsUI";
 import { SUPERS, getSuper, superUnlockLabel, METER_MAX, METER_GAIN, type SuperId } from "@/lib/superPowers";
 import { getAIParams, predictBallY, getSkillTier, recordMatchResult, type AIParams } from "@/lib/aiDifficulty";
+import { playTrack, stopAllMusic, armMusic, flushArmed, setMusicVolume, setMusicMuted, type TrackId } from "@/lib/music";
 
 
 type Screen = "start" | "modes" | "shop" | "settings" | "leaderboard" | "play" | "paused" | "end";
@@ -168,7 +169,7 @@ export default function PaddleClashArena() {
 
   // Audio
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const musicNodesRef = useRef<{ osc: OscillatorNode; gain: GainNode; interval: number } | null>(null);
+  
   const getAudio = () => {
     if (!audioCtxRef.current && typeof window !== "undefined") {
       const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
@@ -192,30 +193,31 @@ export default function PaddleClashArena() {
       try { navigator.vibrate(ms); } catch {}
     }
   };
-  const startMusic = useCallback(() => {
-    const ctx = getAudio(); if (!ctx || musicNodesRef.current) return;
-    const notes = [220, 277, 330, 277, 247, 330, 392, 330];
-    let i = 0;
-    const gain = ctx.createGain(); gain.gain.value = 0.04; gain.connect(ctx.destination);
-    const osc = ctx.createOscillator(); osc.type = "triangle"; osc.frequency.value = notes[0];
-    osc.connect(gain); osc.start();
-    const interval = window.setInterval(() => {
-      i = (i + 1) % notes.length;
-      osc.frequency.setValueAtTime(notes[i], ctx.currentTime);
-    }, 280);
-    musicNodesRef.current = { osc, gain, interval };
-  }, []);
-  const stopMusic = useCallback(() => {
-    const n = musicNodesRef.current; if (!n) return;
-    clearInterval(n.interval);
-    try { n.osc.stop(); } catch {}
-    n.gain.disconnect();
-    musicNodesRef.current = null;
-  }, []);
+  // Arm music on first user gesture (browser autoplay policy).
   useEffect(() => {
-    if (settings.music && screen === "play") startMusic(); else stopMusic();
-    return () => stopMusic();
-  }, [settings.music, screen, startMusic, stopMusic]);
+    const onFirst = () => { armMusic(); flushArmed(); };
+    window.addEventListener("pointerdown", onFirst, { once: true });
+    window.addEventListener("keydown", onFirst, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", onFirst);
+      window.removeEventListener("keydown", onFirst);
+    };
+  }, []);
+  // Soundtrack: select track from current screen + mode.
+  useEffect(() => {
+    if (!settingsHydrated) return;
+    if (!settings.music) { stopAllMusic(); return; }
+    setMusicMuted(false);
+    setMusicVolume(0.5);
+    let track: TrackId = null;
+    if (screen === "play" || screen === "paused") {
+      track = mode === "boss" ? "boss" : "stages";
+    } else if (screen === "shop") {
+      track = "shop";
+    }
+    playTrack(track);
+  }, [settings.music, screen, mode, settingsHydrated]);
+  useEffect(() => () => stopAllMusic(), []);
 
   const resetBall = useCallback((toward: 1 | -1) => {
     const s = state.current;
