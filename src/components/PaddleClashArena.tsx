@@ -72,6 +72,10 @@ export default function PaddleClashArena() {
   const [rally, setRally] = useState(0);
   const [showDaily, setShowDaily] = useState(false);
   const [matchPayout, setMatchPayout] = useState<GrantResult | null>(null);
+  const [superMeter, setSuperMeter] = useState({ p1: 0, p2: 0 });
+  const [aiTierLabel, setAiTierLabel] = useState("");
+  const [superBanner, setSuperBanner] = useState<{ id: SuperId; ts: number } | null>(null);
+
 
   useEffect(() => { persistSettings(settings); }, [settings]);
 
