@@ -36,16 +36,39 @@ export default function LandingPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
 
-  useEffect(() => () => { audioRef.current?.pause(); }, []);
+  useEffect(() => {
+    const a = new Audio(stagesAsset.url);
+    a.volume = 0.5;
+    a.loop = true;
+    audioRef.current = a;
+
+    let cleanupListeners: (() => void) | null = null;
+    const startOnInteract = () => {
+      a.play().then(() => setPlaying(true)).catch(() => {});
+      cleanupListeners?.();
+    };
+
+    const tryAutoplay = a.play();
+    if (tryAutoplay && typeof tryAutoplay.then === "function") {
+      tryAutoplay.then(() => setPlaying(true)).catch(() => {
+        const events: (keyof WindowEventMap)[] = ["pointerdown", "keydown", "touchstart", "scroll"];
+        events.forEach(ev => window.addEventListener(ev, startOnInteract, { once: true, passive: true } as AddEventListenerOptions));
+        cleanupListeners = () => events.forEach(ev => window.removeEventListener(ev, startOnInteract));
+      });
+    } else {
+      setPlaying(true);
+    }
+
+    return () => {
+      cleanupListeners?.();
+      try { a.pause(); } catch {}
+      audioRef.current = null;
+    };
+  }, []);
 
   const togglePreview = () => {
-    if (!audioRef.current) {
-      const a = new Audio(stagesAsset.url);
-      a.volume = 0.5;
-      audioRef.current = a;
-      a.onended = () => setPlaying(false);
-    }
     const a = audioRef.current;
+    if (!a) return;
     if (playing) { a.pause(); setPlaying(false); }
     else { a.play().then(() => setPlaying(true)).catch(() => {}); }
   };
