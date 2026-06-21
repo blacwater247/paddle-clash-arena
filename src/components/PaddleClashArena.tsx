@@ -506,8 +506,12 @@ export default function PaddleClashArena() {
           const aiCenter = s.aiY + PADDLE_H / 2;
           const diff = target - aiCenter;
           const move = Math.max(-ap.maxSpeed, Math.min(ap.maxSpeed, diff * 0.18));
-          s.aiY += move * dtScale;
+          // Time Warp slows opponent (AI)
+          const nowTW = performance.now();
+          const twP1 = s.activeSuperP1?.id === "timewarp" && (s.activeSuperP1.until ?? 0) > nowTW;
+          s.aiY += move * dtScale * (twP1 ? 0.45 : 1);
         }
+
 
         s.aiY = Math.max(0, Math.min(BASE_H - PADDLE_H, s.aiY));
 
