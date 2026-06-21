@@ -172,7 +172,8 @@ export const defaultRewards: RewardsData = {
   xp: 0,
   wins: 0,
   ownedItems: ["paddle:classic", "ball:default", "table:midnight", "victory:default"],
-  equipped: { paddle: "paddle:classic", ball: "ball:default", table: "table:midnight", victory: "victory:default" },
+  equipped: { paddle: "paddle:classic", ball: "ball:default", table: "table:midnight", victory: "victory:default", super: "meteor" },
+  ownedSupers: ["meteor"],
   streak: { count: 0, lastClaimDate: null },
   daily: null,
 };
@@ -183,12 +184,17 @@ export function loadRewards(): RewardsData {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<RewardsData>;
+      const ownedSupers = Array.from(new Set([
+        ...((parsed.ownedSupers ?? []) as SuperId[]),
+        ...defaultRewards.ownedSupers,
+      ]));
       return {
         ...defaultRewards,
         ...parsed,
         equipped: { ...defaultRewards.equipped, ...(parsed.equipped ?? {}) },
         streak: { ...defaultRewards.streak, ...(parsed.streak ?? {}) },
         ownedItems: Array.from(new Set([...(parsed.ownedItems ?? []), ...defaultRewards.ownedItems])),
+        ownedSupers,
       };
     }
     // Migrate from legacy save (wins + paddle + table)
