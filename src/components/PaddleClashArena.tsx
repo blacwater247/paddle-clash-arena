@@ -192,30 +192,19 @@ export default function PaddleClashArena() {
       try { navigator.vibrate(ms); } catch {}
     }
   };
-  const startMusic = useCallback(() => {
-    const ctx = getAudio(); if (!ctx || musicNodesRef.current) return;
-    const notes = [220, 277, 330, 277, 247, 330, 392, 330];
-    let i = 0;
-    const gain = ctx.createGain(); gain.gain.value = 0.04; gain.connect(ctx.destination);
-    const osc = ctx.createOscillator(); osc.type = "triangle"; osc.frequency.value = notes[0];
-    osc.connect(gain); osc.start();
-    const interval = window.setInterval(() => {
-      i = (i + 1) % notes.length;
-      osc.frequency.setValueAtTime(notes[i], ctx.currentTime);
-    }, 280);
-    musicNodesRef.current = { osc, gain, interval };
-  }, []);
-  const stopMusic = useCallback(() => {
-    const n = musicNodesRef.current; if (!n) return;
-    clearInterval(n.interval);
-    try { n.osc.stop(); } catch {}
-    n.gain.disconnect();
-    musicNodesRef.current = null;
-  }, []);
+  // Soundtrack: select track from current screen + mode.
   useEffect(() => {
-    if (settings.music && screen === "play") startMusic(); else stopMusic();
-    return () => stopMusic();
-  }, [settings.music, screen, startMusic, stopMusic]);
+    if (!settingsHydrated) return;
+    if (!settings.music) { stopAllMusic(); return; }
+    let track: TrackId = null;
+    if (screen === "play" || screen === "paused") {
+      track = mode === "boss" ? "boss" : "stages";
+    } else if (screen === "shop") {
+      track = "shop";
+    }
+    playTrack(track);
+  }, [settings.music, screen, mode, settingsHydrated]);
+  useEffect(() => () => stopAllMusic(), []);
 
   const resetBall = useCallback((toward: 1 | -1) => {
     const s = state.current;
