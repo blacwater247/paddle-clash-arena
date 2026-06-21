@@ -351,7 +351,12 @@ export default function PaddleClashArena() {
       if (k === "Escape" || k === "p" || k === "P") {
         if (screen === "play" || screen === "paused") togglePause();
       }
+      if (screen === "play") {
+        if (k === " " || k === "Spacebar") { e.preventDefault(); activateSuper("p1"); }
+        if (k === "Enter" && state.current.mode === "twoplayer") { e.preventDefault(); activateSuper("p2"); }
+      }
     };
+
     const onKeyUp = (e: KeyboardEvent) => {
       const k = e.key;
       if (k === "ArrowUp") state.current.keys.up = false;
