@@ -1082,6 +1082,11 @@ export default function PaddleClashArena() {
             <RankBar r={rewards} />
           </div>
 
+          <div className="mt-6 w-full max-w-md">
+            <SuperPicker r={rewards} />
+          </div>
+
+
           <div className="mt-6 flex flex-col gap-3 sm:gap-4">
             <button onClick={() => setScreen("modes")} className="btn-arcade text-base sm:text-lg">Play</button>
             <MenuBtn onClick={() => setScreen("shop")}>Shop</MenuBtn>
