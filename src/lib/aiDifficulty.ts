@@ -51,8 +51,8 @@ export function getSkillTier(): SkillTier {
 
 export function recordMatchResult(won: boolean) {
   const s = loadSkill();
-  const next: ("W" | "L")[] = [...s.recent, won ? "W" : "L"].slice(-10);
-  s.recent = next;
+  const result: "W" | "L" = won ? "W" : "L";
+  s.recent = [...s.recent, result].slice(-10);
   if (s.recent.length >= 5) {
     const wins = s.recent.filter(r => r === "W").length;
     const winRate = wins / s.recent.length;
