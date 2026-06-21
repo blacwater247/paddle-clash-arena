@@ -442,9 +442,12 @@ export default function PaddleClashArena() {
       if (s.mode !== "twoplayer") {
         const result = rewardsRef.current.grantMatchRewards(summary);
         setMatchPayout(result);
+        // Update rolling player-skill tier (affects future matches)
+        recordMatchResult(w === "player");
       } else {
         setMatchPayout(null);
       }
+
       // Leaderboard entry (only for solo wins)
       if (w === "player" && s.mode !== "twoplayer") {
         setSettings(prev => {
