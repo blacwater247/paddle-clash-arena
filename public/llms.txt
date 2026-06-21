@@ -1,0 +1,6 @@
+# Paddle Clash Arena
+
+> A premium browser-based arcade table tennis game with power-ups, boss matches, and local 2-player mode. Also wrappable as a native iOS app via Capacitor.
+
+## Pages
+- [Paddle Clash Arena](/): Play the game in the browser — Arcade, Challenge, Boss, and 2-Player modes.
