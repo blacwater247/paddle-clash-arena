@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRewards, getEquippedPreview, type MatchSummary, type GrantResult } from "@/lib/rewards";
+import { useRewards, getEquippedPreview, type MatchSummary, type GrantResult, rankFromLevel, levelFromXp } from "@/lib/rewards";
 import { CoinChip, RankBar, DailyRewardModal, ShopScreen, PostMatchPayout } from "@/components/rewards/RewardsUI";
 
 type Screen = "start" | "modes" | "shop" | "settings" | "leaderboard" | "play" | "paused" | "end";
 type Mode = "arcade" | "challenge" | "boss" | "twoplayer";
 type Winner = "player" | "ai" | "p2" | null;
 type PowerKind = "smash" | "slow" | "shield" | "curve" | "fire";
-type PaddleSkin = string;
-type TableSkin = string;
 
 const WIN_SCORE_DEFAULT = 7;
 const BASE_W = 1024;
@@ -23,7 +21,6 @@ interface Particle { x: number; y: number; vx: number; vy: number; life: number;
 interface TrailPoint { x: number; y: number; }
 interface PowerUp { x: number; y: number; kind: PowerKind; bob: number; }
 interface ActiveEffect { kind: PowerKind; owner: "player" | "ai"; until: number; }
-
 interface LeaderEntry { name: string; score: number; mode: Mode; date: number; }
 
 const POWER_COLORS: Record<PowerKind, string> = {
@@ -36,56 +33,54 @@ const POWER_GLYPH: Record<PowerKind, string> = {
   smash: "⚡", slow: "◷", shield: "◉", curve: "↝", fire: "✸",
 };
 
-const PADDLE_SKINS: Record<PaddleSkin, { name: string; a: string; b: string; glow: string; unlockAt: number }> = {
-  classic:   { name: "Classic Gold",  a: "#1a1a1a", b: "#FFD700", glow: "#FFD700", unlockAt: 0 },
-  lightning: { name: "Lightning",     a: "#3b1f00", b: "#FCD34D", glow: "#FBBF24", unlockAt: 3 },
-  neon:      { name: "Neon Pulse",    a: "#082f49", b: "#22D3EE", glow: "#22D3EE", unlockAt: 5 },
-  crimson:   { name: "Crimson Edge",  a: "#3f0a0a", b: "#F43F5E", glow: "#F43F5E", unlockAt: 8 },
-};
-const TABLE_SKINS: Record<TableSkin, { name: string; top: string; mid: string; line: string; unlockAt: number }> = {
-  midnight: { name: "Midnight Blue", top: "#0a1a3d", mid: "#0e2a5e", line: "#FFFFFF", unlockAt: 0 },
-  emerald:  { name: "Emerald Court", top: "#052e1f", mid: "#064e3b", line: "#FCD34D", unlockAt: 2 },
-  royal:    { name: "Royal Violet",  top: "#1e1b4b", mid: "#3730a3", line: "#FDE68A", unlockAt: 4 },
-  void:     { name: "Void Black",    top: "#000000", mid: "#171717", line: "#22D3EE", unlockAt: 7 },
-};
-
-const LS_KEY = "pca:v2";
-interface SaveData {
-  wins: number;
-  paddle: PaddleSkin;
-  table: TableSkin;
-  music: boolean;
-  sfx: boolean;
-  haptics: boolean;
-  leaderboard: LeaderEntry[];
-}
-const defaultSave: SaveData = {
-  wins: 0, paddle: "classic", table: "midnight",
-  music: false, sfx: true, haptics: true, leaderboard: [],
-};
-
-function loadSave(): SaveData {
-  if (typeof window === "undefined") return defaultSave;
+// ===== Lightweight settings save (audio + leaderboard only; rewards live in their own store) =====
+const LS_KEY = "pca:settings:v1";
+interface SettingsSave { music: boolean; sfx: boolean; haptics: boolean; leaderboard: LeaderEntry[] }
+const defaultSettings: SettingsSave = { music: false, sfx: true, haptics: true, leaderboard: [] };
+function loadSettings(): SettingsSave {
+  if (typeof window === "undefined") return defaultSettings;
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return defaultSave;
-    return { ...defaultSave, ...JSON.parse(raw) };
-  } catch { return defaultSave; }
+    if (raw) return { ...defaultSettings, ...JSON.parse(raw) };
+    // migrate from legacy combined save
+    const legacy = localStorage.getItem("pca:v2");
+    if (legacy) {
+      const v2 = JSON.parse(legacy);
+      return { ...defaultSettings, music: !!v2.music, sfx: v2.sfx !== false, haptics: v2.haptics !== false, leaderboard: v2.leaderboard ?? [] };
+    }
+  } catch {}
+  return defaultSettings;
 }
-function persistSave(s: SaveData) {
+function persistSettings(s: SettingsSave) {
   try { localStorage.setItem(LS_KEY, JSON.stringify(s)); } catch {}
 }
 
 export default function PaddleClashArena() {
+  const rewards = useRewards();
+  const rewardsRef = useRef(rewards);
+  useEffect(() => { rewardsRef.current = rewards; }, [rewards]);
+
   const [screen, setScreen] = useState<Screen>("start");
   const [mode, setMode] = useState<Mode>("arcade");
   const [winner, setWinner] = useState<Winner>(null);
   const [scores, setScores] = useState({ player: 0, ai: 0 });
-  const [save, setSave] = useState<SaveData>(() => loadSave());
+  const [settings, setSettings] = useState<SettingsSave>(() => loadSettings());
   const [activeBadges, setActiveBadges] = useState<{ kind: PowerKind; owner: "player" | "ai"; ms: number }[]>([]);
   const [rally, setRally] = useState(0);
+  const [showDaily, setShowDaily] = useState(false);
+  const [matchPayout, setMatchPayout] = useState<GrantResult | null>(null);
 
-  useEffect(() => { persistSave(save); }, [save]);
+  useEffect(() => { persistSettings(settings); }, [settings]);
+
+  // Auto-open daily reward on first start screen visit if available
+  const dailyAutoShown = useRef(false);
+  useEffect(() => {
+    if (screen === "start" && rewards.canClaimDaily && !dailyAutoShown.current) {
+      dailyAutoShown.current = true;
+      const t = setTimeout(() => setShowDaily(true), 400);
+      return () => clearTimeout(t);
+    }
+  }, [screen, rewards.canClaimDaily]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -117,12 +112,14 @@ export default function PaddleClashArena() {
     effects: [] as ActiveEffect[],
     spawnAt: 0,
     rally: 0,
+    maxRally: 0,
     netWave: 0,
     timeScale: 1,
     smashFor: null as null | "player" | "ai",
     mode: "arcade" as Mode,
-    paddleSkin: "classic" as PaddleSkin,
-    tableSkin: "midnight" as TableSkin,
+    paddleId: "paddle:classic",
+    tableId: "table:midnight",
+    ballId: "ball:default",
     sfx: true,
     haptics: true,
     aiSpeed: 6.2,
@@ -130,15 +127,21 @@ export default function PaddleClashArena() {
     winTarget: WIN_SCORE_DEFAULT,
     bossPhase: 0,
     scale: 1,
+    pickups: 0,
+    startPlayerScore: 0,
+    wasDownBy3: false,
   });
 
-  // Sync save & mode into game state
+  // Sync rewards equipped + settings into game state
   useEffect(() => {
-    state.current.paddleSkin = save.paddle;
-    state.current.tableSkin = save.table;
-    state.current.sfx = save.sfx;
-    state.current.haptics = save.haptics;
-  }, [save]);
+    state.current.paddleId = rewards.data.equipped.paddle;
+    state.current.tableId = rewards.data.equipped.table;
+    state.current.ballId = rewards.data.equipped.ball;
+  }, [rewards.data.equipped]);
+  useEffect(() => {
+    state.current.sfx = settings.sfx;
+    state.current.haptics = settings.haptics;
+  }, [settings]);
 
   // Audio
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -187,9 +190,9 @@ export default function PaddleClashArena() {
     musicNodesRef.current = null;
   }, []);
   useEffect(() => {
-    if (save.music && screen === "play") startMusic(); else stopMusic();
+    if (settings.music && screen === "play") startMusic(); else stopMusic();
     return () => stopMusic();
-  }, [save.music, screen, startMusic, stopMusic]);
+  }, [settings.music, screen, startMusic, stopMusic]);
 
   const resetBall = useCallback((toward: 1 | -1) => {
     const s = state.current;
@@ -224,8 +227,12 @@ export default function PaddleClashArena() {
     state.current.powerups = [];
     state.current.effects = [];
     state.current.spawnAt = performance.now() + 4000;
+    state.current.pickups = 0;
+    state.current.maxRally = 0;
+    state.current.wasDownBy3 = false;
     setScores({ player: 0, ai: 0 });
     setWinner(null);
+    setMatchPayout(null);
     setActiveBadges([]);
     resetBall(Math.random() > 0.5 ? 1 : -1);
     state.current.running = true;
@@ -318,11 +325,12 @@ export default function PaddleClashArena() {
     const ro = new ResizeObserver(resize);
     if (containerRef.current) ro.observe(containerRef.current);
 
-    const drawPaddle = (x: number, y: number, skin: typeof PADDLE_SKINS[PaddleSkin], variant: "player" | "ai", shielded: boolean) => {
+    const drawPaddle = (x: number, y: number, paddleId: string, variant: "player" | "ai", shielded: boolean) => {
       ctx.save();
-      const a = variant === "ai" ? "#3b0a0a" : skin.a;
-      const b = variant === "ai" ? "#E5E7EB" : skin.b;
-      const glow = variant === "ai" ? "#F87171" : skin.glow;
+      const skin = getEquippedPreview(paddleId, "paddle:classic");
+      const a = variant === "ai" ? "#3b0a0a" : (skin.a ?? "#1a1a1a");
+      const b = variant === "ai" ? "#E5E7EB" : (skin.b ?? "#FFD700");
+      const glow = variant === "ai" ? "#F87171" : (skin.glow ?? "#FFD700");
       ctx.shadowColor = glow; ctx.shadowBlur = 28;
       const grad = ctx.createLinearGradient(x, y, x + PADDLE_W, y);
       grad.addColorStop(0, a); grad.addColorStop(1, b);
@@ -330,7 +338,6 @@ export default function PaddleClashArena() {
       ctx.beginPath(); ctx.roundRect(x, y, PADDLE_W, PADDLE_H, 7); ctx.fill();
       ctx.shadowBlur = 0;
       ctx.strokeStyle = glow; ctx.lineWidth = 1.5; ctx.stroke();
-      // power stripe
       ctx.fillStyle = glow;
       ctx.globalAlpha = 0.55;
       ctx.fillRect(x + PADDLE_W / 2 - 1, y + 8, 2, PADDLE_H - 16);
@@ -346,12 +353,49 @@ export default function PaddleClashArena() {
       ctx.restore();
     };
 
+    const endMatch = (w: Winner) => {
+      const s = state.current;
+      s.running = false;
+      setWinner(w);
+      // Build match summary & grant rewards
+      const summary: MatchSummary = {
+        won: w === "player",
+        mode: s.mode,
+        score: s.scores.player,
+        opponentScore: s.scores.ai,
+        pickups: s.pickups,
+        maxRally: s.maxRally,
+        comeback: s.wasDownBy3 && w === "player",
+        perfect: s.scores.ai === 0 && w === "player",
+      };
+      // Skip rewards for 2-player local mode (no individual progression)
+      if (s.mode !== "twoplayer") {
+        const result = rewardsRef.current.grantMatchRewards(summary);
+        setMatchPayout(result);
+      } else {
+        setMatchPayout(null);
+      }
+      // Leaderboard entry (only for solo wins)
+      if (w === "player" && s.mode !== "twoplayer") {
+        setSettings(prev => {
+          const entry: LeaderEntry = {
+            name: rewardsRef.current.rank.name.toUpperCase(),
+            score: s.scores.player * 100 + s.maxRally * 5 + (s.mode === "boss" ? 500 : s.mode === "challenge" ? 250 : 0),
+            mode: s.mode, date: Date.now(),
+          };
+          const lb = [...prev.leaderboard, entry].sort((a, b) => b.score - a.score).slice(0, 10);
+          return { ...prev, leaderboard: lb };
+        });
+      }
+      setScreen("end");
+    };
+
     const loop = (tms: number) => {
       const s = state.current;
       const dtScale = s.timeScale;
 
       if (s.running && !s.paused) {
-        // Inputs → Player1 (left)
+        // Inputs → Player1
         if (s.pointerY !== null) {
           const t = s.pointerY - PADDLE_H / 2;
           s.playerY += (t - s.playerY) * 0.35;
@@ -385,20 +429,17 @@ export default function PaddleClashArena() {
         }
         s.aiY = Math.max(0, Math.min(BASE_H - PADDLE_H, s.aiY));
 
-        // Curve effect
         const playerEff = s.effects.find(e => e.owner === "player");
         const aiEff = s.effects.find(e => e.owner === "ai");
         if (playerEff?.kind === "curve" || aiEff?.kind === "curve") {
           s.ballVY += s.ballSpin * 0.06;
         }
-        // Slow time tweaks dtScale
         const slowActive = s.effects.some(e => e.kind === "slow");
         const effectiveDt = slowActive ? 0.55 : dtScale;
 
         s.ballX += s.ballVX * effectiveDt;
         s.ballY += s.ballVY * effectiveDt;
 
-        // Walls
         if (s.ballY - BALL_R < 0) { s.ballY = BALL_R; s.ballVY = -s.ballVY; beep(440, 0.04, "square", 0.07); }
         if (s.ballY + BALL_R > BASE_H) { s.ballY = BASE_H - BALL_R; s.ballVY = -s.ballVY; beep(440, 0.04, "square", 0.07); }
 
@@ -428,19 +469,21 @@ export default function PaddleClashArena() {
           s.ballX = isPlayer ? paddleX + PADDLE_W + BALL_R : paddleX - BALL_R;
           s.shake = Math.min(14, speed * 0.7);
 
-          const col = isPlayer
-            ? PADDLE_SKINS[s.paddleSkin].glow
-            : "#F87171";
+          const skinPreview = getEquippedPreview(s.paddleId, "paddle:classic");
+          const col = isPlayer ? (skinPreview.glow ?? "#FFD700") : "#F87171";
           spawnHitParticles(s.ballX, s.ballY, col, eff?.kind === "smash" ? 28 : 16);
           if (eff?.kind === "smash") spawnSparkLine(s.ballX, s.ballY, "#FFD700");
           beep(580 + Math.abs(hit) * 220, 0.06, "square", 0.18);
           haptic(eff?.kind === "smash" ? 24 : 10);
 
-          // Consume one-shot effects
           if (eff && (eff.kind === "smash" || eff.kind === "curve")) {
             s.effects = s.effects.filter(e => e !== eff);
           }
           s.rally += 1;
+          if (s.rally > s.maxRally) {
+            s.maxRally = s.rally;
+            rewardsRef.current.recordRally(s.rally);
+          }
           setRally(s.rally);
           return true;
         };
@@ -453,7 +496,6 @@ export default function PaddleClashArena() {
           pu.bob += 0.08;
           const dx = s.ballX - pu.x, dy = s.ballY - pu.y;
           if (dx * dx + dy * dy < (BALL_R + 18) ** 2) {
-            // Owner = side ball is now traveling toward originator (last hitter)
             const owner: "player" | "ai" = s.ballVX > 0 ? "player" : "ai";
             const dur = pu.kind === "shield" ? 6000 : pu.kind === "slow" || pu.kind === "fire" ? 4500 : 8000;
             s.effects.push({ kind: pu.kind, owner, until: performance.now() + dur });
@@ -461,12 +503,15 @@ export default function PaddleClashArena() {
             spawnHitParticles(pu.x, pu.y, POWER_COLORS[pu.kind], 20);
             beep(880, 0.18, "triangle", 0.2);
             haptic(15);
+            if (owner === "player" && s.mode !== "twoplayer") {
+              s.pickups += 1;
+              rewardsRef.current.grantPickup();
+            }
             return false;
           }
           return true;
         });
 
-        // Spawn powerups periodically (not for boss until phase 2)
         if (tms > s.spawnAt && s.powerups.length < 2) {
           const pool: PowerKind[] = ["smash", "slow", "shield", "curve", "fire"];
           const kind = pool[Math.floor(Math.random() * pool.length)];
@@ -478,7 +523,6 @@ export default function PaddleClashArena() {
           s.spawnAt = tms + 6000 + Math.random() * 4000;
         }
 
-        // Expire effects
         const now = performance.now();
         const before = s.effects.length;
         s.effects = s.effects.filter(e => e.until > now);
@@ -489,7 +533,6 @@ export default function PaddleClashArena() {
 
         // Score
         if (s.ballX < -20) {
-          // Shield blocks one goal for the player
           const shieldP = s.effects.find(e => e.owner === "player" && e.kind === "shield");
           if (shieldP) {
             s.effects = s.effects.filter(e => e !== shieldP);
@@ -503,6 +546,7 @@ export default function PaddleClashArena() {
             s.flash = 32; s.flashColor = "#EF4444";
             beep(180, 0.3, "sawtooth", 0.2);
             haptic(30);
+            if (s.scores.ai - s.scores.player >= 3) s.wasDownBy3 = true;
             if (s.scores.ai >= s.winTarget) endMatch("ai");
             else resetBall(1);
           }
@@ -521,20 +565,18 @@ export default function PaddleClashArena() {
             beep(880, 0.22, "triangle", 0.22);
             beep(1320, 0.16, "triangle", 0.18);
             haptic(20);
-            if (s.scores.player >= s.winTarget) endMatch(s.mode === "twoplayer" ? "player" : "player");
+            if (s.mode !== "twoplayer") rewardsRef.current.recordPoint();
+            if (s.scores.player >= s.winTarget) endMatch("player");
             else resetBall(-1);
           }
         }
 
-        // Trail
         s.trail.push({ x: s.ballX, y: s.ballY });
         if (s.trail.length > 22) s.trail.shift();
 
-        // Particles
         s.particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vx *= 0.92; p.vy *= 0.92; p.life += 1; });
         s.particles = s.particles.filter(p => p.life < p.max);
 
-        // Fire trail particles
         if (s.ballFire) {
           s.particles.push({
             x: s.ballX, y: s.ballY,
@@ -555,13 +597,14 @@ export default function PaddleClashArena() {
       const shakeY = (Math.random() - 0.5) * s.shake;
       ctx.translate(shakeX, shakeY);
 
-      const table = TABLE_SKINS[s.tableSkin];
+      const table = getEquippedPreview(s.tableId, "table:midnight");
       const bg = ctx.createLinearGradient(0, 0, 0, BASE_H);
-      bg.addColorStop(0, table.top); bg.addColorStop(0.5, table.mid); bg.addColorStop(1, table.top);
+      bg.addColorStop(0, table.top ?? "#0a1a3d");
+      bg.addColorStop(0.5, table.mid ?? "#0e2a5e");
+      bg.addColorStop(1, table.top ?? "#0a1a3d");
       ctx.fillStyle = bg;
       ctx.fillRect(-20, -20, BASE_W + 40, BASE_H + 40);
 
-      // Arena lights (radial sweeps)
       ctx.save();
       ctx.globalAlpha = 0.18;
       const lg1 = ctx.createRadialGradient(BASE_W * 0.2, BASE_H * 0.5, 20, BASE_W * 0.2, BASE_H * 0.5, 380);
@@ -572,24 +615,21 @@ export default function PaddleClashArena() {
       ctx.fillStyle = lg2; ctx.fillRect(0, 0, BASE_W, BASE_H);
       ctx.restore();
 
-      // Grid
+      const lineColor = table.line ?? "#FFFFFF";
       ctx.globalAlpha = 0.06;
-      ctx.strokeStyle = table.line; ctx.lineWidth = 1;
+      ctx.strokeStyle = lineColor; ctx.lineWidth = 1;
       for (let i = 0; i < BASE_W; i += 40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, BASE_H); ctx.stroke(); }
       for (let j = 0; j < BASE_H; j += 40) { ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(BASE_W, j); ctx.stroke(); }
       ctx.globalAlpha = 1;
 
-      // Boundary
-      ctx.strokeStyle = table.line; ctx.lineWidth = 4;
+      ctx.strokeStyle = lineColor; ctx.lineWidth = 4;
       ctx.strokeRect(8, 8, BASE_W - 16, BASE_H - 16);
 
-      // Center dashed
       ctx.setLineDash([14, 14]); ctx.lineWidth = 3;
       ctx.strokeStyle = "rgba(255,255,255,0.45)";
       ctx.beginPath(); ctx.moveTo(BASE_W / 2, 12); ctx.lineTo(BASE_W / 2, BASE_H - 12); ctx.stroke();
       ctx.setLineDash([]);
 
-      // Animated glowing net
       ctx.save();
       ctx.shadowColor = "#FFFFFF"; ctx.shadowBlur = 10;
       ctx.globalAlpha = 0.85;
@@ -603,7 +643,6 @@ export default function PaddleClashArena() {
       ctx.fillRect(BASE_W / 2 - 6, BASE_H - 22, 12, 8);
       ctx.restore();
 
-      // Powerups
       s.powerups.forEach(pu => {
         const r = 18 + Math.sin(pu.bob) * 2;
         ctx.save();
@@ -619,27 +658,27 @@ export default function PaddleClashArena() {
         ctx.restore();
       });
 
-      // Trail
+      const ballSkin = getEquippedPreview(s.ballId, "ball:default");
+      const trailColor = s.ballFire ? "#FB923C" : (ballSkin.glow ?? "#60A5FA");
       s.trail.forEach((t, i) => {
         const a = (i / s.trail.length) * 0.7;
-        ctx.fillStyle = s.ballFire ? `rgba(251, 146, 60, ${a})` : `rgba(96, 165, 250, ${a})`;
-        ctx.shadowColor = s.ballFire ? "#FB923C" : "#60A5FA"; ctx.shadowBlur = 22;
+        ctx.fillStyle = s.ballFire ? `rgba(251, 146, 60, ${a})` : trailColor;
+        ctx.globalAlpha = s.ballFire ? 1 : a;
+        ctx.shadowColor = trailColor; ctx.shadowBlur = 22;
         ctx.beginPath();
         ctx.arc(t.x, t.y, BALL_R * (i / s.trail.length) * 1.3, 0, Math.PI * 2);
         ctx.fill();
       });
+      ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
 
-      // Paddles
       const playerShield = s.effects.some(e => e.owner === "player" && e.kind === "shield");
       const aiShield = s.effects.some(e => e.owner === "ai" && e.kind === "shield");
-      const playerSkin = PADDLE_SKINS[s.paddleSkin];
-      drawPaddle(30, s.playerY, playerSkin, "player", playerShield);
-      drawPaddle(BASE_W - 30 - PADDLE_W, s.aiY, playerSkin, "ai", aiShield);
+      drawPaddle(30, s.playerY, s.paddleId, "player", playerShield);
+      drawPaddle(BASE_W - 30 - PADDLE_W, s.aiY, s.paddleId, "ai", aiShield);
 
-      // Ball
       ctx.save();
-      const ballColor = s.ballFire ? "#FBBF24" : "#60A5FA";
+      const ballColor = s.ballFire ? "#FBBF24" : (ballSkin.glow ?? "#60A5FA");
       ctx.shadowColor = ballColor; ctx.shadowBlur = 32;
       const bgrad = ctx.createRadialGradient(s.ballX, s.ballY, 1, s.ballX, s.ballY, BALL_R);
       bgrad.addColorStop(0, "#FFFFFF");
@@ -649,7 +688,6 @@ export default function PaddleClashArena() {
       ctx.beginPath(); ctx.arc(s.ballX, s.ballY, BALL_R, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
 
-      // Particles
       s.particles.forEach(p => {
         const a = 1 - p.life / p.max;
         ctx.fillStyle = p.color;
@@ -659,7 +697,6 @@ export default function PaddleClashArena() {
       });
       ctx.globalAlpha = 1; ctx.shadowBlur = 0;
 
-      // Flash overlay
       if (s.flash > 0) {
         ctx.globalAlpha = (s.flash / 34) * 0.28;
         ctx.fillStyle = s.flashColor;
@@ -671,31 +708,11 @@ export default function PaddleClashArena() {
       rafRef.current = requestAnimationFrame(loop);
     };
 
-    const endMatch = (w: Winner) => {
-      const s = state.current;
-      s.running = false;
-      setWinner(w);
-      setScreen("end");
-      // Save win + unlock
-      if (w === "player") {
-        setSave(prev => {
-          const nextWins = prev.wins + 1;
-          const entry: LeaderEntry = {
-            name: prev.paddle === "classic" ? "PLAYER" : prev.paddle.toUpperCase(),
-            score: s.scores.player * 100 + s.rally * 5 + (s.mode === "boss" ? 500 : s.mode === "challenge" ? 250 : 0),
-            mode: s.mode, date: Date.now(),
-          };
-          const lb = [...prev.leaderboard, entry].sort((a, b) => b.score - a.score).slice(0, 10);
-          return { ...prev, wins: nextWins, leaderboard: lb };
-        });
-      }
-    };
-
     rafRef.current = requestAnimationFrame(loop);
     return () => { cancelAnimationFrame(rafRef.current); window.removeEventListener("resize", resize); ro.disconnect(); };
   }, [beep, resetBall]);
 
-  // Pointer / touch handlers
+  // Pointer / touch
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current; if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -708,33 +725,22 @@ export default function PaddleClashArena() {
     }
   };
   const onPointerLeave = () => { state.current.pointerY = null; state.current.pointerY2 = null; };
-
-  // Touch zones overlay (mobile)
   const onTouchZone = (e: React.TouchEvent<HTMLDivElement>, side: "p1" | "p2") => {
     const target = e.currentTarget;
     const rect = target.getBoundingClientRect();
     const touch = e.touches[0];
-    if (!touch) {
-      if (side === "p1") state.current.touchP1 = null; else state.current.touchP2 = null;
-      return;
-    }
+    if (!touch) { if (side === "p1") state.current.touchP1 = null; else state.current.touchP2 = null; return; }
     const ry = ((touch.clientY - rect.top) / rect.height) * BASE_H;
     if (side === "p1") state.current.touchP1 = ry; else state.current.touchP2 = ry;
   };
 
-  const updateSave = (patch: Partial<SaveData>) => setSave(prev => ({ ...prev, ...patch }));
-
-  const unlockedPaddles = useMemo(
-    () => (Object.keys(PADDLE_SKINS) as PaddleSkin[]).filter(k => save.wins >= PADDLE_SKINS[k].unlockAt),
-    [save.wins]
-  );
-  const unlockedTables = useMemo(
-    () => (Object.keys(TABLE_SKINS) as TableSkin[]).filter(k => save.wins >= TABLE_SKINS[k].unlockAt),
-    [save.wins]
-  );
+  const updateSettings = (patch: Partial<SettingsSave>) => setSettings(prev => ({ ...prev, ...patch }));
 
   const playerBadges = activeBadges.filter(b => b.owner === "player");
   const aiBadges = activeBadges.filter(b => b.owner === "ai");
+
+  // Live coin counter shown during play (from rewards.coins)
+  const liveCoins = rewards.coins;
 
   return (
     <div className="relative h-[100dvh] w-screen overflow-hidden bg-background">
@@ -775,6 +781,11 @@ export default function PaddleClashArena() {
                 RALLY × {rally}
               </span>
             )}
+            {mode !== "twoplayer" && (
+              <div className="mt-2 pointer-events-auto">
+                <CoinChip coins={liveCoins} glow={false} />
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-end">
             <span className="text-[10px] tracking-[0.3em] text-[oklch(0.7_0.22_245)] text-glow-electric sm:text-xs">
@@ -792,15 +803,13 @@ export default function PaddleClashArena() {
         </div>
       )}
 
-      {/* Top-right controls */}
       {(screen === "play" || screen === "paused") && (
         <div className="absolute right-3 bottom-3 z-30 flex gap-2 sm:right-6 sm:bottom-6">
-          <IconBtn onClick={() => updateSave({ sfx: !save.sfx })} label={save.sfx ? "SFX" : "MUTE"} />
+          <IconBtn onClick={() => updateSettings({ sfx: !settings.sfx })} label={settings.sfx ? "SFX" : "MUTE"} />
           <IconBtn onClick={togglePause} label={state.current.paused ? "▶" : "II"} />
         </div>
       )}
 
-      {/* Canvas */}
       <div ref={containerRef} className="absolute inset-0 flex items-center justify-center p-2 sm:p-6">
         <canvas
           ref={canvasRef}
@@ -810,7 +819,6 @@ export default function PaddleClashArena() {
         />
       </div>
 
-      {/* Mobile touch zones (only during play, on touch devices) */}
       {screen === "play" && (
         <>
           <div
@@ -830,18 +838,68 @@ export default function PaddleClashArena() {
         </>
       )}
 
-      {/* ===== START / MAIN MENU ===== */}
+      {/* ===== START ===== */}
       {screen === "start" && (
         <Overlay>
+          {/* Top-right coin chip */}
+          <div className="absolute right-4 top-4 sm:right-8 sm:top-6">
+            <CoinChip coins={rewards.coins} />
+          </div>
+
           <Title />
-          <div className="mt-8 flex flex-col gap-3 sm:gap-4">
+
+          <div className="mt-6">
+            <RankBar r={rewards} />
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3 sm:gap-4">
             <button onClick={() => setScreen("modes")} className="btn-arcade text-base sm:text-lg">Play</button>
-            <MenuBtn onClick={() => setScreen("skins")}>Paddles & Tables</MenuBtn>
+            <MenuBtn onClick={() => setScreen("shop")}>Shop</MenuBtn>
+            {rewards.canClaimDaily && (
+              <button
+                onClick={() => setShowDaily(true)}
+                className="relative rounded-lg border border-[oklch(0.82_0.17_85)] bg-[oklch(0.82_0.17_85/0.15)] px-6 py-3 text-sm font-black tracking-[0.2em] uppercase text-[oklch(0.82_0.17_85)] backdrop-blur transition hover:bg-[oklch(0.82_0.17_85/0.25)]"
+              >
+                ★ Daily Reward
+                <span className="absolute -right-1 -top-1 h-3 w-3 animate-ping rounded-full bg-[oklch(0.82_0.17_85)]" />
+              </button>
+            )}
             <MenuBtn onClick={() => setScreen("leaderboard")}>Leaderboard</MenuBtn>
             <MenuBtn onClick={() => setScreen("settings")}>Settings</MenuBtn>
           </div>
-          <p className="mt-8 text-[10px] tracking-[0.4em] text-muted-foreground">WINS · {save.wins}</p>
+
+          <div className="mt-8 flex items-center gap-4 text-[10px] tracking-[0.4em] text-muted-foreground">
+            <span>WINS · {rewards.data.wins}</span>
+            <span>·</span>
+            <span>STREAK · {rewards.data.streak.count}</span>
+          </div>
+
+          {rewards.data.daily && !rewards.data.daily.challenge.claimed && (
+            <div className="mt-5 w-full max-w-xs rounded-lg border border-[oklch(0.7_0.22_245/0.4)] bg-card/50 p-3 text-center">
+              <p className="text-[9px] tracking-[0.3em] text-[oklch(0.7_0.22_245)]">DAILY CHALLENGE</p>
+              <p className="mt-0.5 text-xs font-bold text-foreground">{rewards.data.daily.challenge.label}</p>
+              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
+                <div className="h-full bg-[oklch(0.7_0.22_245)]" style={{ width: `${(rewards.data.daily.challenge.progress / rewards.data.daily.challenge.target) * 100}%` }} />
+              </div>
+              <p className="mt-1 text-[10px] tabular-nums text-muted-foreground">
+                {rewards.data.daily.challenge.progress}/{rewards.data.daily.challenge.target} · +{rewards.data.daily.challenge.reward}
+              </p>
+              {rewards.data.daily.challenge.progress >= rewards.data.daily.challenge.target && (
+                <button
+                  onClick={() => rewards.claimChallenge()}
+                  className="mt-2 w-full rounded bg-[oklch(0.82_0.17_85)] py-1 text-[10px] font-black tracking-widest text-background"
+                >
+                  CLAIM +{rewards.data.daily.challenge.reward}
+                </button>
+              )}
+            </div>
+          )}
         </Overlay>
+      )}
+
+      {/* Daily Modal */}
+      {showDaily && screen === "start" && (
+        <DailyRewardModal r={rewards} onClose={() => setShowDaily(false)} />
       )}
 
       {/* ===== MODES ===== */}
@@ -849,71 +907,19 @@ export default function PaddleClashArena() {
         <Overlay>
           <h2 className="mb-6 text-2xl font-black uppercase tracking-[0.2em] text-foreground text-glow-gold sm:text-4xl">Choose Mode</h2>
           <div className="grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
-            <ModeCard title="Arcade" desc="Classic. First to 7. Power-ups on." accent="gold" onClick={() => startGame("arcade")} />
-            <ModeCard title="Challenge" desc="Faster AI, sharper aim. First to 9." accent="electric" onClick={() => startGame("challenge")} />
-            <ModeCard title="Boss Match" desc="Elite AI. First to 11. No mercy." accent="red" onClick={() => startGame("boss")} />
+            <ModeCard title="Arcade" desc="Classic. First to 7. +50 coins." accent="gold" onClick={() => startGame("arcade")} />
+            <ModeCard title="Challenge" desc="Sharper AI. First to 9. +100." accent="electric" onClick={() => startGame("challenge")} />
+            <ModeCard title="Boss Match" desc="Elite AI. First to 11. +250." accent="red" onClick={() => startGame("boss")} />
             <ModeCard title="2 Player Local" desc="Split touch. W/S vs ↑/↓." accent="violet" onClick={() => startGame("twoplayer")} />
           </div>
           <BackBtn onClick={() => setScreen("start")} />
         </Overlay>
       )}
 
-      {/* ===== SKINS ===== */}
-      {screen === "skins" && (
+      {/* ===== SHOP ===== */}
+      {screen === "shop" && (
         <Overlay>
-          <h2 className="mb-2 text-2xl font-black uppercase tracking-[0.2em] text-foreground text-glow-gold sm:text-4xl">Paddles & Tables</h2>
-          <p className="mb-6 text-[10px] tracking-[0.3em] text-muted-foreground">UNLOCK MORE BY WINNING MATCHES</p>
-          <div className="grid w-full max-w-3xl gap-6 sm:grid-cols-2">
-            <div>
-              <h3 className="mb-3 text-xs tracking-[0.3em] text-[oklch(0.82_0.17_85)]">PADDLES</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {(Object.keys(PADDLE_SKINS) as PaddleSkin[]).map(k => {
-                  const sk = PADDLE_SKINS[k];
-                  const locked = !unlockedPaddles.includes(k);
-                  const active = save.paddle === k;
-                  return (
-                    <button
-                      key={k}
-                      disabled={locked}
-                      onClick={() => updateSave({ paddle: k })}
-                      className={`rounded-lg border-2 p-3 text-left transition ${
-                        active ? "border-[oklch(0.82_0.17_85)] bg-card" : "border-border bg-card/40"
-                      } ${locked ? "opacity-40" : "hover:border-[oklch(0.82_0.17_85)]"}`}
-                    >
-                      <div className="mb-2 h-8 w-full rounded" style={{ background: `linear-gradient(135deg, ${sk.a}, ${sk.b})`, boxShadow: `0 0 18px ${sk.glow}66` }} />
-                      <p className="text-xs font-bold text-foreground">{sk.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{locked ? `Win ${sk.unlockAt}` : active ? "Equipped" : "Tap to equip"}</p>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div>
-              <h3 className="mb-3 text-xs tracking-[0.3em] text-[oklch(0.7_0.22_245)]">TABLES</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {(Object.keys(TABLE_SKINS) as TableSkin[]).map(k => {
-                  const tb = TABLE_SKINS[k];
-                  const locked = !unlockedTables.includes(k);
-                  const active = save.table === k;
-                  return (
-                    <button
-                      key={k}
-                      disabled={locked}
-                      onClick={() => updateSave({ table: k })}
-                      className={`rounded-lg border-2 p-3 text-left transition ${
-                        active ? "border-[oklch(0.7_0.22_245)] bg-card" : "border-border bg-card/40"
-                      } ${locked ? "opacity-40" : "hover:border-[oklch(0.7_0.22_245)]"}`}
-                    >
-                      <div className="mb-2 h-8 w-full rounded" style={{ background: `linear-gradient(180deg, ${tb.top}, ${tb.mid}, ${tb.top})`, borderTop: `2px solid ${tb.line}`, borderBottom: `2px solid ${tb.line}` }} />
-                      <p className="text-xs font-bold text-foreground">{tb.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{locked ? `Win ${tb.unlockAt}` : active ? "Equipped" : "Tap to equip"}</p>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-          <BackBtn onClick={() => setScreen("start")} />
+          <ShopScreen r={rewards} onBack={() => setScreen("start")} />
         </Overlay>
       )}
 
@@ -922,11 +928,11 @@ export default function PaddleClashArena() {
         <Overlay>
           <h2 className="mb-6 text-2xl font-black uppercase tracking-[0.2em] text-foreground text-glow-gold sm:text-4xl">Settings</h2>
           <div className="flex w-full max-w-sm flex-col gap-3">
-            <Toggle label="Sound Effects" value={save.sfx} onChange={v => updateSave({ sfx: v })} />
-            <Toggle label="Music" value={save.music} onChange={v => updateSave({ music: v })} />
-            <Toggle label="Haptics" value={save.haptics} onChange={v => updateSave({ haptics: v })} />
+            <Toggle label="Sound Effects" value={settings.sfx} onChange={v => updateSettings({ sfx: v })} />
+            <Toggle label="Music" value={settings.music} onChange={v => updateSettings({ music: v })} />
+            <Toggle label="Haptics" value={settings.haptics} onChange={v => updateSettings({ haptics: v })} />
             <button
-              onClick={() => { if (confirm("Reset all progress and unlocks?")) setSave(defaultSave); }}
+              onClick={() => { if (confirm("Reset ALL progress, coins, unlocks, and leaderboard?")) { rewards.reset(); setSettings(defaultSettings); } }}
               className="mt-4 rounded-lg border border-destructive/40 px-4 py-2 text-xs font-bold tracking-widest text-destructive hover:bg-destructive/10"
             >
               RESET PROGRESS
@@ -941,11 +947,11 @@ export default function PaddleClashArena() {
         <Overlay>
           <h2 className="mb-6 text-2xl font-black uppercase tracking-[0.2em] text-foreground text-glow-gold sm:text-4xl">Leaderboard</h2>
           <div className="w-full max-w-md rounded-xl border border-border bg-card/40 p-4">
-            {save.leaderboard.length === 0 ? (
+            {settings.leaderboard.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">Win a match to make the board.</p>
             ) : (
               <ol className="flex flex-col gap-2">
-                {save.leaderboard.map((e, i) => (
+                {settings.leaderboard.map((e, i) => (
                   <li key={i} className="flex items-center justify-between rounded-md bg-background/40 px-3 py-2 text-sm">
                     <span className="flex items-center gap-3">
                       <span className="w-6 text-[oklch(0.82_0.17_85)] font-black">#{i + 1}</span>
@@ -985,11 +991,15 @@ export default function PaddleClashArena() {
           >
             {winner === "player" ? (mode === "twoplayer" ? "P1 Wins" : "Victory") : (mode === "twoplayer" ? "P2 Wins" : "Defeat")}
           </h2>
-          <p className="mb-8 text-xl font-bold tracking-[0.2em] text-foreground sm:text-2xl">
+          <p className="mb-6 text-xl font-bold tracking-[0.2em] text-foreground sm:text-2xl">
             {scores.player} <span className="text-muted-foreground">—</span> {scores.ai}
           </p>
+
+          {matchPayout && <PostMatchPayout result={matchPayout} />}
+
           <div className="flex flex-col gap-3 sm:flex-row">
             <button onClick={() => startGame(mode)} className="btn-arcade">Play Again</button>
+            <MenuBtn onClick={() => setScreen("shop")}>Shop</MenuBtn>
             <MenuBtn onClick={() => setScreen("modes")}>Change Mode</MenuBtn>
             <MenuBtn onClick={() => setScreen("start")}>Main Menu</MenuBtn>
           </div>
