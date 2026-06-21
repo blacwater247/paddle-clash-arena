@@ -125,15 +125,26 @@ export default function PaddleClashArena() {
     ballId: "ball:default",
     sfx: true,
     haptics: true,
-    aiSpeed: 6.2,
-    aiJitter: 30,
     winTarget: WIN_SCORE_DEFAULT,
     bossPhase: 0,
     scale: 1,
     pickups: 0,
     startPlayerScore: 0,
     wasDownBy3: false,
+    // ===== Adaptive AI =====
+    skillTier: 0 as -1 | 0 | 1 | 2,
+    aiParams: { reactionDelay: 12, trackingError: 50, maxSpeed: 7, predictionDepth: 0.3, smashChance: 0.1, tierLabel: "NORMAL" } as AIParams,
+    aiTargetBuf: [] as number[], // recent ball Y readings; reaction delay reads from tail
+    aiSmashNext: false,
+    // ===== Super Powers =====
+    superId: "meteor" as SuperId,
+    superMeterP1: 0,
+    superMeterP2: 0,
+    activeSuperP1: null as { id: SuperId; until?: number; pendingHit?: boolean } | null,
+    activeSuperP2: null as { id: SuperId; until?: number; pendingHit?: boolean } | null,
+    chainOnBall: null as null | "player" | "ai", // which player launched the chain shot
   });
+
 
   // Sync rewards equipped + settings into game state
   useEffect(() => {
