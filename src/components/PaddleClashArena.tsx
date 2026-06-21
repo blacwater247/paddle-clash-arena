@@ -6,8 +6,8 @@ type Screen = "start" | "modes" | "shop" | "settings" | "leaderboard" | "play" |
 type Mode = "arcade" | "challenge" | "boss" | "twoplayer";
 type Winner = "player" | "ai" | "p2" | null;
 type PowerKind = "smash" | "slow" | "shield" | "curve" | "fire";
-type PaddleSkin = "classic" | "lightning" | "neon" | "crimson";
-type TableSkin = "midnight" | "emerald" | "royal" | "void";
+type PaddleSkin = string;
+type TableSkin = string;
 
 const WIN_SCORE_DEFAULT = 7;
 const BASE_W = 1024;
