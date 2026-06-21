@@ -3,6 +3,7 @@ import { useRewards, getEquippedPreview, type MatchSummary, type GrantResult, ra
 import { CoinChip, RankBar, DailyRewardModal, ShopScreen, PostMatchPayout } from "@/components/rewards/RewardsUI";
 import { SUPERS, getSuper, superUnlockLabel, METER_MAX, METER_GAIN, type SuperId } from "@/lib/superPowers";
 import { getAIParams, predictBallY, getSkillTier, recordMatchResult, type AIParams } from "@/lib/aiDifficulty";
+import { playTrack, stopAllMusic, armMusic, flushArmed, setMusicVolume, setMusicMuted, type TrackId } from "@/lib/music";
 
 
 type Screen = "start" | "modes" | "shop" | "settings" | "leaderboard" | "play" | "paused" | "end";
