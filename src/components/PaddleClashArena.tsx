@@ -155,7 +155,9 @@ export default function PaddleClashArena() {
     state.current.paddleId = rewards.data.equipped.paddle;
     state.current.tableId = rewards.data.equipped.table;
     state.current.ballId = rewards.data.equipped.ball;
+    state.current.superId = rewards.data.equipped.super;
   }, [rewards.data.equipped]);
+
   useEffect(() => {
     state.current.sfx = settings.sfx;
     state.current.haptics = settings.haptics;
