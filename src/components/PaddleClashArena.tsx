@@ -966,6 +966,12 @@ export default function PaddleClashArena() {
                 </span>
               ))}
             </div>
+            <SuperMeterButton
+              value={superMeter.p1}
+              superId={rewards.data.equipped.super}
+              onActivate={() => activateSuper("p1")}
+              label="SPACE"
+            />
           </div>
           <div className="flex flex-col items-center pt-1">
             <span className="text-[9px] tracking-[0.3em] text-muted-foreground sm:text-[10px]">
@@ -980,6 +986,14 @@ export default function PaddleClashArena() {
             {rally > 2 && (
               <span className="mt-1 text-[10px] font-bold tracking-[0.2em] text-[oklch(0.82_0.17_85)]">
                 RALLY × {rally}
+              </span>
+            )}
+            {mode !== "twoplayer" && aiTierLabel && (
+              <span
+                key={aiTierLabel}
+                className="mt-1 rounded-full border border-[oklch(0.7_0.22_245/0.5)] bg-[oklch(0.7_0.22_245/0.12)] px-2 py-0.5 text-[9px] font-black tracking-[0.3em] text-[oklch(0.7_0.22_245)] animate-fade-in"
+              >
+                AI · {aiTierLabel}
               </span>
             )}
             {mode !== "twoplayer" && (
@@ -1000,9 +1014,24 @@ export default function PaddleClashArena() {
                 </span>
               ))}
             </div>
+            {mode === "twoplayer" && (
+              <SuperMeterButton
+                value={superMeter.p2}
+                superId={rewards.data.equipped.super}
+                onActivate={() => activateSuper("p2")}
+                label="ENTER"
+                align="end"
+              />
+            )}
           </div>
         </div>
       )}
+
+      {/* Super Activation Banner */}
+      {superBanner && (screen === "play" || screen === "paused") && (
+        <SuperBanner id={superBanner.id} key={superBanner.ts} />
+      )}
+
 
       {(screen === "play" || screen === "paused") && (
         <div className="absolute right-3 bottom-3 z-30 flex gap-2 sm:right-6 sm:bottom-6">
