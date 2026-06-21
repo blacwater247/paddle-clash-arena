@@ -664,8 +664,13 @@ export default function PaddleClashArena() {
             if (owner === "player" && s.mode !== "twoplayer") {
               s.pickups += 1;
               rewardsRef.current.grantPickup();
+              s.superMeterP1 = Math.min(METER_MAX, s.superMeterP1 + METER_GAIN.pickup);
+            } else if (s.mode === "twoplayer") {
+              if (owner === "player") s.superMeterP1 = Math.min(METER_MAX, s.superMeterP1 + METER_GAIN.pickup);
+              else                    s.superMeterP2 = Math.min(METER_MAX, s.superMeterP2 + METER_GAIN.pickup);
             }
             return false;
+
           }
           return true;
         });
