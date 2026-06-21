@@ -440,12 +440,26 @@ export default function PaddleClashArena() {
           if (s.keys.up2) s.aiY -= PADDLE_SPEED;
           if (s.keys.down2) s.aiY += PADDLE_SPEED;
         } else {
+          // Adaptive AI: refresh params each frame so curve responds to score
+          s.aiParams = getAIParams(s.mode, s.scores.player, s.scores.ai, s.winTarget, s.skillTier);
+          const ap = s.aiParams;
+
+          // Track ball with reaction delay buffer
+          s.aiTargetBuf.push(s.ballY);
+          if (s.aiTargetBuf.length > 60) s.aiTargetBuf.shift();
+          const delayedBallY = s.aiTargetBuf[Math.max(0, s.aiTargetBuf.length - 1 - ap.reactionDelay)] ?? s.ballY;
+
+          // Blend current vs predicted intercept
+          const predicted = predictBallY(s.ballX, delayedBallY, s.ballVX, s.ballVY, BASE_W - 30 - PADDLE_W, BASE_H, BALL_R);
+          const blendedTarget = delayedBallY * (1 - ap.predictionDepth) + predicted * ap.predictionDepth;
+          const target = blendedTarget + (Math.random() - 0.5) * ap.trackingError;
+
           const aiCenter = s.aiY + PADDLE_H / 2;
-          const target = s.ballY + (Math.random() - 0.5) * s.aiJitter;
           const diff = target - aiCenter;
-          const move = Math.max(-s.aiSpeed, Math.min(s.aiSpeed, diff * 0.14));
+          const move = Math.max(-ap.maxSpeed, Math.min(ap.maxSpeed, diff * 0.18));
           s.aiY += move * dtScale;
         }
+
         s.aiY = Math.max(0, Math.min(BASE_H - PADDLE_H, s.aiY));
 
         const playerEff = s.effects.find(e => e.owner === "player");
