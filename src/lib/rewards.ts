@@ -56,14 +56,15 @@ export interface GrantResult {
 }
 
 // ====== RANKS / XP ======
-export const RANKS = [
+export interface RankInfo { name: string; minLevel: number; color: string }
+export const RANKS: RankInfo[] = [
   { name: "Rookie",     minLevel: 1,  color: "#94A3B8" },
   { name: "Amateur",    minLevel: 6,  color: "#FCD34D" },
   { name: "Pro",        minLevel: 11, color: "#22D3EE" },
   { name: "Champion",   minLevel: 16, color: "#F472B6" },
   { name: "Legend",     minLevel: 21, color: "#A855F7" },
   { name: "Arena God",  minLevel: 26, color: "#FFD700" },
-] as const;
+];
 
 export const MAX_LEVEL = 30;
 
