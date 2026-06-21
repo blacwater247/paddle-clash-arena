@@ -193,10 +193,22 @@ export default function PaddleClashArena() {
       try { navigator.vibrate(ms); } catch {}
     }
   };
+  // Arm music on first user gesture (browser autoplay policy).
+  useEffect(() => {
+    const onFirst = () => { armMusic(); flushArmed(); };
+    window.addEventListener("pointerdown", onFirst, { once: true });
+    window.addEventListener("keydown", onFirst, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", onFirst);
+      window.removeEventListener("keydown", onFirst);
+    };
+  }, []);
   // Soundtrack: select track from current screen + mode.
   useEffect(() => {
     if (!settingsHydrated) return;
     if (!settings.music) { stopAllMusic(); return; }
+    setMusicMuted(false);
+    setMusicVolume(0.5);
     let track: TrackId = null;
     if (screen === "play" || screen === "paused") {
       track = mode === "boss" ? "boss" : "stages";
