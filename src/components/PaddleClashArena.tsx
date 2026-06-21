@@ -67,7 +67,8 @@ export default function PaddleClashArena() {
   const [mode, setMode] = useState<Mode>("arcade");
   const [winner, setWinner] = useState<Winner>(null);
   const [scores, setScores] = useState({ player: 0, ai: 0 });
-  const [settings, setSettings] = useState<SettingsSave>(() => loadSettings());
+  const [settings, setSettings] = useState<SettingsSave>(defaultSettings);
+  const [settingsHydrated, setSettingsHydrated] = useState(false);
   const [activeBadges, setActiveBadges] = useState<{ kind: PowerKind; owner: "player" | "ai"; ms: number }[]>([]);
   const [rally, setRally] = useState(0);
   const [showDaily, setShowDaily] = useState(false);
@@ -77,7 +78,9 @@ export default function PaddleClashArena() {
   const [superBanner, setSuperBanner] = useState<{ id: SuperId; ts: number } | null>(null);
 
 
-  useEffect(() => { persistSettings(settings); }, [settings]);
+  // Hydrate settings from localStorage after mount (avoid SSR mismatch)
+  useEffect(() => { setSettings(loadSettings()); setSettingsHydrated(true); }, []);
+  useEffect(() => { if (settingsHydrated) persistSettings(settings); }, [settings, settingsHydrated]);
 
   // Auto-open daily reward on first start screen visit if available
   const dailyAutoShown = useRef(false);
