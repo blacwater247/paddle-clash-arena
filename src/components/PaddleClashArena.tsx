@@ -759,7 +759,17 @@ export default function PaddleClashArena() {
         if (s.shake > 0) s.shake *= 0.85;
         if (s.flash > 0) s.flash -= 1;
         s.netWave += 0.05;
+
+        // Sync super meter / AI tier label to component state (cheap throttle every ~6 frames)
+        if ((tms | 0) % 6 === 0) {
+          setSuperMeter(prev => {
+            if (prev.p1 === s.superMeterP1 && prev.p2 === s.superMeterP2) return prev;
+            return { p1: s.superMeterP1, p2: s.superMeterP2 };
+          });
+          setAiTierLabel(prev => prev === s.aiParams.tierLabel ? prev : s.aiParams.tierLabel);
+        }
       }
+
 
       // ====== Draw ======
       ctx.save();
