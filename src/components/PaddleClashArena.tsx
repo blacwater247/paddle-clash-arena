@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRewards, getEquippedPreview, type MatchSummary, type GrantResult, rankFromLevel, levelFromXp } from "@/lib/rewards";
 import { CoinChip, RankBar, DailyRewardModal, ShopScreen, PostMatchPayout } from "@/components/rewards/RewardsUI";
+import { SUPERS, getSuper, superUnlockLabel, METER_MAX, METER_GAIN, type SuperId } from "@/lib/superPowers";
+import { getAIParams, predictBallY, getSkillTier, recordMatchResult, type AIParams } from "@/lib/aiDifficulty";
+
 
 type Screen = "start" | "modes" | "shop" | "settings" | "leaderboard" | "play" | "paused" | "end";
 type Mode = "arcade" | "challenge" | "boss" | "twoplayer";
