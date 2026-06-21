@@ -1,62 +1,25 @@
-# Plan: Landing Page + Pro-Gamer Music System
+## Goal
+When a visitor opens the landing page (`/`), the stages OST should start playing automatically. The "♪ Hear OST / ■ Stop" button stays as a manual toggle.
 
-## 1. Landing Page (new `/` route)
+## The browser-autoplay reality
+Chrome/Safari/Firefox block `audio.play()` until the user interacts with the page. We can't bypass this — but we can:
+1. Try to play immediately on mount (works if the user has previously interacted with the site, or in browsers with relaxed policies).
+2. If that promise rejects, attach a one-shot listener (`pointerdown` / `keydown` / `touchstart` / `scroll`) that starts playback on the very first interaction and then removes itself.
 
-Move the current game from `/` to `/play`, and make `/` a marketing-style landing page styled for a pro-gamer audience.
+This gives "music plays as soon as possible" without a console error.
 
-Sections:
-- **Hero** — Animated arena background, big logo "PADDLE CLASH ARENA", tagline, primary CTA "Play Now" → `/play`, secondary "How to Play".
-- **Feature grid** — Power-ups, Super Powers, Boss Battles, Stages/Arenas, 2-Player, Shop & Ranks.
-- **Stages showcase** — Carousel of arena tables (Midnight, Volcano, Cyber Grid, Sky Temple…) with names + unlock level.
-- **Boss preview** — Tease of boss matches with stats (HP, special moves).
-- **Ranks ladder** — Rookie → Arena God progression visual.
-- **Soundtrack strip** — "Featuring an original soundtrack" with a 🔊 preview button (plays a short clip of the stage track).
-- **Final CTA + footer**.
-
-Visual direction: dark slate background, neon cyan/gold accents, sharp angular cards, subtle scanlines/grid, Orbitron/Rajdhani-style display font for headings (loaded via `<link>` in `__root.tsx`).
-
-SEO: route-specific `head()` with title, description, OG tags, og:image (generated hero image).
-
-## 2. In-Game Music System
-
-Three uploaded tracks become the soundtrack, uploaded as CDN assets via `lovable-assets`:
-
-| Track file | Role in game |
-|---|---|
-| `DIFFENERENT STAGES.mp3` | Default match music (Arcade / Challenge / 2-Player) |
-| `BOSS LEVEL AND DIFFERENT STAGES.mp3` | Boss matches |
-| `WHEN SHOPPING MUSIIC.mp3` | Shop / Rewards UI screen |
-
-Implementation:
-- New `src/lib/music.ts` — singleton `HTMLAudioElement` per track, with `playTrack(id)`, `stop()`, `setVolume()`, crossfade on switch, loop=true, respects `settings.musicMuted` and `settings.musicVolume` (default 0.5).
-- Hydration-safe: only starts after first user interaction (browser autoplay policy) — listen for first click on the Play/Start button.
-- Hook `useGameMusic(screen, mode)` inside `PaddleClashArena` picks the right track:
-  - `screen === "shop"` → shopping track
-  - `screen === "playing" && mode === "boss"` → boss track
-  - `screen === "playing"` (other modes) → stages track
-  - otherwise → fade out (menu silence)
-- Landing page: silent by default; soundtrack preview button plays a 15-second sample of the stages track.
-
-## 3. Settings additions
-
-Extend `useSettings` (in `PaddleClashArena.tsx`) with `musicMuted: boolean` and `musicVolume: number`. Add a 🎵 toggle + volume slider in the in-game header next to existing SFX controls. Persist to localStorage with same hydration-safe pattern already used.
-
-## 4. Routing
-
-- `src/routes/index.tsx` → new `LandingPage` component (file `src/components/LandingPage.tsx`).
-- `src/routes/play.tsx` → renders `PaddleClashArena` (move existing meta there, update canonical).
-- Update internal links and the "Play" CTA to use `<Link to="/play">`.
-- Update `sitemap[.]xml.ts` to include both routes.
-
-## Technical notes
-
-- Asset uploads: `lovable-assets create --file /mnt/user-uploads/<name>.mp3 --filename <slug>.mp3 > src/assets/<slug>.mp3.asset.json`, then import the JSON for `audio.src = asset.url`.
-- All audio code runs only after mount + first user gesture to avoid SSR/autoplay issues (same hydration pattern as recent rewards fix).
-- Hero og:image generated via imagegen (premium tier for legible logo text).
-- No changes to game logic, rewards, AI, or super-powers — purely additive.
+## Changes — `src/components/LandingPage.tsx` only
+- Move audio creation out of `togglePreview` into a `useEffect` that runs on mount:
+  - Create the `Audio(stagesAsset.url)`, set `volume = 0.5`, `loop = true`.
+  - Call `play()`. On success → `setPlaying(true)`.
+  - On rejection → register `pointerdown`/`keydown`/`touchstart`/`scroll` listeners (passive, `once: true`) that call `play()` and set `playing` to true.
+- On unmount: pause audio and remove any pending listeners.
+- `togglePreview` keeps working: pauses if playing, resumes if stopped. The label still flips between "♪ Hear OST" and "■ Stop".
+- Loop the preview so it doesn't end after one play (remove the `onended` reset, since it's now looping).
 
 ## Out of scope
+- No changes to the in-game music engine (`src/lib/music.ts`) or `/play` route — those already arm on user interaction inside the game.
+- No new global mute / settings UI on the landing page (existing toggle button is the control).
 
-- New stage/boss content (existing tables and boss mode remain as-is).
-- Per-stage unique tracks beyond the three provided.
-- Online multiplayer / accounts.
+## Caveat to share with the user
+Some browsers (notably Safari on iOS and Chrome on a cold first visit) will refuse autoplay outright. In that case the track will start the instant the visitor clicks, taps, or scrolls anywhere — which is the closest "automatic" behavior the web platform allows.
