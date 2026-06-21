@@ -30,9 +30,12 @@ function loadSkill(): SkillSave {
   try {
     const r = localStorage.getItem(SKILL_KEY);
     if (r) {
-      const p = JSON.parse(r) as Partial<SkillSave>;
-      const tier = (p.tier ?? 0) as SkillTier;
-      return { recent: Array.isArray(p.recent) ? p.recent.slice(-10) as ("W"|"L")[] : [], tier };
+      const p = JSON.parse(r) as { recent?: unknown; tier?: number };
+      const tier = ((p.tier ?? 0) as SkillTier);
+      const recent = Array.isArray(p.recent)
+        ? (p.recent.filter((x): x is "W" | "L" => x === "W" || x === "L").slice(-10))
+        : [];
+      return { recent, tier };
     }
   } catch {}
   return { recent: [], tier: 0 };
