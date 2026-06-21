@@ -89,6 +89,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Paddle Clash Arena" },
+      { name: "twitter:description", content: "Fast-paced arcade table tennis. First to 7 wins." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/p2bGEYWYHYN5El64aqCfUprBQ553/social-images/social-1782001854605-ChatGPT_Image_Jun_20,_2026,_08_20_39_PM.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/p2bGEYWYHYN5El64aqCfUprBQ553/social-images/social-1782001854605-ChatGPT_Image_Jun_20,_2026,_08_20_39_PM.webp" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
