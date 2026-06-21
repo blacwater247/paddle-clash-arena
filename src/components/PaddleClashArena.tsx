@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRewards, getEquippedPreview, type MatchSummary, type GrantResult } from "@/lib/rewards";
+import { CoinChip, RankBar, DailyRewardModal, ShopScreen, PostMatchPayout } from "@/components/rewards/RewardsUI";
 
-type Screen = "start" | "modes" | "skins" | "settings" | "leaderboard" | "play" | "paused" | "end";
+type Screen = "start" | "modes" | "shop" | "settings" | "leaderboard" | "play" | "paused" | "end";
 type Mode = "arcade" | "challenge" | "boss" | "twoplayer";
 type Winner = "player" | "ai" | "p2" | null;
 type PowerKind = "smash" | "slow" | "shield" | "curve" | "fire";
