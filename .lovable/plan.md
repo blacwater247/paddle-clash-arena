@@ -1,51 +1,57 @@
-## Goal
-Wrap the existing Paddle Clash Arena web game in Capacitor so you can build a native iOS app and submit it to the Apple App Store.
+# Paddle Clash Arena — Pro Rewards System
 
-## Important note about the Lovable environment
-Lovable runs a Linux-based cloud editor. Building and submitting an iOS app **requires a Mac with Xcode** — there is no way around this (Apple's rule, not Lovable's). What I can do here is set up the project correctly so that, once you export the code to your own Mac, the iOS build "just works".
+A fast, generous, fully-local progression layer added to the existing game. Everything persists to `localStorage`, no backend required.
 
-The flow will be:
-1. I prepare the Capacitor setup inside the Lovable project.
-2. You export the project to GitHub → clone it to a Mac.
-3. On the Mac, run a few commands to generate the native iOS project, open it in Xcode, and submit to App Store Connect.
+## The 4 Reward Pillars
 
-## What I'll change in the project
+### 1. Coins (currency)
+Earned every match, spendable in a Shop.
+- Win: **+50 coins** (Arcade), **+100** (Challenge), **+250** (Boss), **+75** (2P winner)
+- Per point scored: **+5 coins**
+- Power-up pickup: **+2 coins**
+- Perfect game (opponent 0): **+200 bonus**
+- Comeback win (was down 3+): **+150 bonus**
 
-### 1. Add Capacitor dependencies
-- `@capacitor/core`, `@capacitor/cli`, `@capacitor/ios`
-- `@capacitor/status-bar`, `@capacitor/haptics` (nice-to-have for the game feel)
+### 2. XP & Ranks
+Same actions grant XP. Level up shows a flashy gold flash + coin bonus.
+- Ranks: **Rookie → Amateur → Pro → Champion → Legend → Arena God** (6 tiers, 5 levels each = 30 levels)
+- XP curve: `100 * level^1.4` (fast early, slower later)
+- Rank-up reward: **+500 coins** and unlocks a cosmetic
+- Rank badge displayed on start screen + during play HUD
 
-### 2. Add `capacitor.config.ts` at project root
-- `appId`: `app.lovable.paddleclasharena` (you can change this later)
-- `appName`: `Paddle Clash Arena`
-- `webDir`: `dist` (TanStack Start build output)
-- iOS settings: background color matching the game, allow inline media
+### 3. Daily Streak
+Opens a "Daily Reward" modal on first launch each day.
+- Day 1: 50 coins · Day 2: 100 · Day 3: 200 · Day 4: 350 · Day 5: 500 · Day 6: 750 · **Day 7: 1500 + exclusive skin**
+- Streak resets if a day is skipped; current streak shown on start screen
+- Plus a **Daily Challenge** ("Win 3 Arcade matches", "Score 5 power-hits") for +300 coins
 
-### 3. Mobile-friendly tweaks to the game (frontend only)
-- Lock orientation hints (landscape works best for paddle play)
-- Disable iOS rubber-band scroll / text selection on the canvas
-- Add safe-area padding so the score/overlay aren't under the notch
-- Add `viewport-fit=cover` and `apple-mobile-web-app-capable` meta tags
-- Optional: trigger a light haptic via `@capacitor/haptics` on paddle hits
+### 4. Cosmetic Shop
+Spend coins. Replaces the current unlock-by-wins flow with buy-with-coins (existing skins stay, plus new ones).
+- **Paddle skins**: Classic (free), Lightning (500), Neon (1000), Crimson (1500), Inferno (3000), Galaxy (5000), Prismatic (10000)
+- **Ball trails**: Default, Fire, Electric, Rainbow, Comet, Void (300–4000)
+- **Table themes**: existing 4 + Sunset, Cyber Grid, Volcano (1000–3500)
+- **Victory effects**: Confetti, Lightning Storm, Fireworks (800–2500)
+- Rank-locked items (e.g. Prismatic requires Legend rank)
 
-### 4. Add a short `IOS_BUILD.md` with the exact Mac commands
-```
-npm install
-npm run build
-npx cap add ios
-npx cap sync ios
-npx cap open ios
-```
-Plus notes on: setting your Apple Team ID in Xcode, app icon, launch screen, and using Xcode's "Archive → Distribute App" to upload to App Store Connect.
+## UI Additions
 
-## What I will NOT do (and can't from here)
-- Run `npx cap add ios` (needs macOS/Xcode)
-- Generate the Xcode project, `.ipa`, or upload to App Store Connect
-- Create your Apple Developer account ($99/yr — required for App Store)
-- Make app icons / screenshots (can generate PNGs if you want, but Xcode imports them)
+- **Start screen**: coin balance (top-right with gold coin icon), rank badge + XP bar, "Daily Reward" button if available, "Shop" button
+- **Post-match screen**: animated coin counter rolling up, XP bar filling, "+50 coins", "+25 XP" floating numbers, rank-up celebration if triggered
+- **Shop screen**: grid of items by category tab, locked items grayscale with price/rank requirement, purchase confirmation
+- **Daily modal**: 7-day calendar grid showing claimed/today/upcoming
 
-## Open questions before I build
-1. App name on the home screen — keep **"Paddle Clash Arena"** or shorten (iOS truncates ~12 chars)?
-2. Force **landscape only**, or allow portrait too?
-3. Want me to add **haptic feedback** on paddle hits and scoring?
-4. Should I generate an **app icon** (1024×1024) now, or will you supply one?
+## Technical Notes
+
+- Single `useRewards()` hook managing all state, persisted to `localStorage` key `pca_rewards_v1`
+- Schema: `{ coins, xp, level, rank, streak: { count, lastClaimDate }, dailyChallenge: { id, progress, claimed }, ownedItems: string[], equipped: { paddle, ball, table, victory } }`
+- Match-end handler in `PaddleClashArena.tsx` calls `rewards.grantMatchRewards({ won, score, opponentScore, mode, powerHits })`
+- New components: `RewardsHUD`, `PostMatchRewards`, `DailyRewardModal`, `ShopScreen`, `RankBadge`
+- Existing skins system migrated: previously win-gated items become coin-gated; grandfather current unlocks
+- Keep black/gold/electric-blue aesthetic, Orbitron font, animated counters with `requestAnimationFrame`
+
+## Out of scope
+- Online leaderboards, accounts, cloud sync (user chose local)
+- Real-money purchases
+- Battle pass / seasons (can add later)
+
+Ready to build when you approve.
