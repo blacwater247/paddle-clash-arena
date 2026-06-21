@@ -1339,3 +1339,109 @@ function AnimatedNumber({ value, className }: { value: number; className?: strin
   }, [value]);
   return <span className={`${className ?? ""} inline-block transition-transform ${pop ? "scale-125" : "scale-100"}`}>{value}</span>;
 }
+
+// ===== Super HUD components =====
+function SuperMeterButton({
+  value, superId, onActivate, label, align = "start",
+}: {
+  value: number; superId: SuperId; onActivate: () => void; label: string; align?: "start" | "end";
+}) {
+  const def = getSuper(superId);
+  const ready = value >= METER_MAX;
+  const pct = Math.min(100, (value / METER_MAX) * 100);
+  return (
+    <button
+      onClick={onActivate}
+      disabled={!ready}
+      className={`pointer-events-auto mt-2 flex items-center gap-2 rounded-md border px-2 py-1 backdrop-blur transition ${
+        ready
+          ? "border-[color:var(--super-c)] bg-[color:var(--super-c)]/15 shadow-[0_0_18px_color-mix(in_oklab,var(--super-c)_60%,transparent)] animate-pulse"
+          : "border-border bg-card/50 opacity-80"
+      } ${align === "end" ? "flex-row-reverse" : ""}`}
+      style={{ ["--super-c" as string]: def.color }}
+      aria-label={`Activate ${def.name}`}
+    >
+      <span className="text-base leading-none" style={{ color: def.color, textShadow: ready ? `0 0 10px ${def.color}` : undefined }}>
+        {def.glyph}
+      </span>
+      <div className="flex flex-col">
+        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted sm:w-24">
+          <div className="h-full transition-all" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${def.color}, #FFD700)` }} />
+        </div>
+        <span className="mt-0.5 text-[8px] tracking-[0.25em] text-muted-foreground">
+          {ready ? `READY · ${label}` : def.short.toUpperCase()}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+function SuperBanner({ id }: { id: SuperId }) {
+  const def = getSuper(id);
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-1/3 z-40 flex justify-center">
+      <div
+        className="rounded-xl border-2 px-6 py-3 backdrop-blur-md animate-fade-in"
+        style={{
+          borderColor: def.color,
+          background: `${def.color}22`,
+          boxShadow: `0 0 48px ${def.color}88`,
+        }}
+      >
+        <p className="text-center text-[10px] tracking-[0.5em]" style={{ color: def.color }}>SUPER POWER</p>
+        <p className="text-center text-3xl font-black uppercase tracking-[0.18em] text-foreground sm:text-4xl"
+           style={{ textShadow: `0 0 18px ${def.color}` }}>
+          {def.glyph} {def.name}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SuperPicker({ r }: { r: ReturnType<typeof useRewards> }) {
+  const equipped = r.data.equipped.super;
+  return (
+    <div className="flex flex-col items-center">
+      <p className="mb-2 text-[10px] tracking-[0.4em] text-muted-foreground">SUPER POWER</p>
+      <div className="grid w-full grid-cols-5 gap-2">
+        {SUPERS.map(def => {
+          const owned = r.isSuperOwned(def.id);
+          const isEquipped = equipped === def.id;
+          const canBuy = def.unlock.type === "coins" && r.canPurchaseSuper(def.id).ok;
+          const click = () => {
+            if (owned) r.equipSuper(def.id);
+            else if (canBuy) r.purchaseSuper(def.id);
+          };
+          return (
+            <button
+              key={def.id}
+              onClick={click}
+              disabled={!owned && !canBuy}
+              className={`group relative flex flex-col items-center rounded-lg border p-2 transition ${
+                isEquipped
+                  ? "border-[color:var(--c)] bg-[color:var(--c)]/15 shadow-[0_0_18px_color-mix(in_oklab,var(--c)_50%,transparent)]"
+                  : owned
+                    ? "border-border bg-card/50 hover:border-[color:var(--c)]"
+                    : "border-border bg-card/20 opacity-60"
+              }`}
+              style={{ ["--c" as string]: def.color }}
+              title={def.desc}
+            >
+              <span className="text-xl leading-none" style={{ color: def.color, textShadow: owned ? `0 0 10px ${def.color}` : undefined }}>
+                {def.glyph}
+              </span>
+              <span className="mt-1 text-[9px] font-black tracking-wider text-foreground">{def.short.toUpperCase()}</span>
+              <span className="text-[8px] tracking-wider text-muted-foreground">
+                {isEquipped ? "EQUIPPED" : owned ? "EQUIP" : superUnlockLabel(def)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-center text-[9px] text-muted-foreground">
+        Tap to {SUPERS.some(s => !r.isSuperOwned(s.id)) ? "equip / buy" : "equip"} · Activate in-game with SPACE
+      </p>
+    </div>
+  );
+}
+
