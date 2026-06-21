@@ -370,7 +370,7 @@ export default function PaddleClashArena() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [screen]);
+  }, [screen, activateSuper]);
 
   // Game loop
   useEffect(() => {
