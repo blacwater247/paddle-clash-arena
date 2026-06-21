@@ -230,18 +230,27 @@ export function saveRewards(d: RewardsData) {
 
 // ====== HOOK ======
 export function useRewards() {
-  const [data, setData] = useState<RewardsData>(() => loadRewards());
+  // Start with defaults on both server and first client render to avoid
+  // SSR/CSR hydration mismatches; hydrate from localStorage after mount.
+  const [data, setData] = useState<RewardsData>(defaultRewards);
+  const [hydrated, setHydrated] = useState(false);
 
-  // Daily challenge auto-rotates per day
   useEffect(() => {
+    setData(loadRewards());
+    setHydrated(true);
+  }, []);
+
+  // Daily challenge auto-rotates per day (after hydration)
+  useEffect(() => {
+    if (!hydrated) return;
     const today = todayKey();
     if (!data.daily || data.daily.date !== today) {
       setData(d => ({ ...d, daily: { date: today, challenge: pickDailyChallenge() } }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hydrated]);
 
-  useEffect(() => { saveRewards(data); }, [data]);
+  useEffect(() => { if (hydrated) saveRewards(data); }, [data, hydrated]);
 
   const level = useMemo(() => levelFromXp(data.xp), [data.xp]);
   const rank = useMemo(() => rankFromLevel(level), [level]);

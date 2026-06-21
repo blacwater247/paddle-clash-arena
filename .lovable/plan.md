@@ -1,99 +1,45 @@
+## Problem
 
-# Super Powers + Adaptive AI Difficulty
+Mid-match, the game jumps back to the start screen instead of letting the match finish. There's no code path in `PaddleClashArena.tsx` that calls `setScreen("start")` during play — `endMatch` only sets `"end"`, and pause only toggles `"play"` ↔ `"paused"`. So the screen is being reset because **the component (or its parent) is remounting**, which throws `useState<Screen>("start")` back to its initial value.
 
-Two upgrades to Paddle Clash Arena: a flashy **Super Power** system the player can trigger mid-match, and a **gradual AI difficulty curve** so the computer starts beatable and ramps up as the player progresses.
+Two strong suspects, both introduced in the recent Super Powers / Adaptive AI / new shop items work:
 
-## 1. Super Powers (player-activated ultimates)
+### Suspect 1 — Hydration mismatch triggers tree regeneration
+The current runtime error log shows:
 
-Separate from the existing pickup power-ups. Each player has a **Super Meter** that fills as they play; when full, they tap a key / on-screen button to unleash a Super Power.
-
-**Meter fills from:**
-- Each point won: +25%
-- Each successful rally hit: +3%
-- Power-up pickup: +10%
-- Taking a hit (losing a point): +15% (catch-up help)
-
-**Activation:** `Space` (P1) / `Enter` (P2), or tap the glowing meter on mobile. Meter empties on use.
-
-**5 Super Powers** (player picks 1 as their "loadout" on the start screen; unlock more via the rewards system):
-
-| Power | Effect | Duration |
-|---|---|---|
-| Meteor Smash | Next hit launches a fireball at 2.5x speed with screen shake + gold burst | 1 hit |
-| Time Warp | Slows ball + opponent paddle to 40% speed | 4s |
-| Mirror Wall | Player paddle grows 2x + auto-deflects at sharp angles | 5s |
-| Phantom Clone | A second ghost paddle mirrors player movement, can also hit ball | 6s |
-| Chain Lightning | Ball zig-zags unpredictably and ignores opponent paddle once | 1 hit |
-
-Visual: full meter pulses gold, activation triggers a brief freeze-frame + flash, power name banner slides across screen.
-
-**Unlocks** (tie into existing rewards):
-- Meteor Smash: free (default)
-- Time Warp: Rank 3
-- Mirror Wall: 1500 coins
-- Phantom Clone: Rank 8
-- Chain Lightning: 3500 coins
-
-## 2. Adaptive AI Difficulty
-
-Replace the current fixed AI with a **dynamic skill model** that starts gentle and ramps up. Two axes drive it: **match progress** (within a single match) and **player skill** (across matches, stored locally).
-
-**AI parameters that scale:**
-- `reactionDelay` — frames before AI starts tracking ball (higher = slower)
-- `trackingError` — random offset added to target Y position
-- `maxSpeed` — paddle movement cap
-- `predictionDepth` — 0 = follows current ball Y, 1 = predicts bounce point
-- `smashChance` — odds of returning with extra velocity
-
-**Per-mode base curves:**
-
-```text
-Arcade   start: very easy   →  ramps over first 5 points to medium
-Challenge start: medium     →  ramps every 3 points, caps at hard
-Boss     start: hard        →  flat hard, with scripted super-power uses
-2P Local no AI
+```
+Hydration failed because the server rendered text didn't match the client.
+CoinChip coins={358}  (client)  vs  200 (server)
 ```
 
-**Within a match (Arcade example):**
-```text
-Score state         reaction  error  speed  predict  smash
-0-0 to 2-x          18 frames 80px   0.55   0        0%
-3-x to 6-x          12 frames 50px   0.70   0.3      10%
-7-x onward          7 frames  25px   0.85   0.7      25%
-Match point (AI)    5 frames  15px   0.95   1.0      35%
-```
+React's response is "this tree will be regenerated on the client". On the very first client render after hydration that's a partial unmount/remount of the subtree containing `PaddleClashArena`, which resets `screen` to `"start"`. The mismatch comes from `useRewards()` reading `localStorage` synchronously during render — SSR sees defaults (200 coins), client sees the saved value (358 coins).
 
-**Player skill calibration (cross-match, localStorage):**
-Track rolling win rate over last 10 matches.
-- Win rate > 70%: shift all curves +1 tier (harder baseline)
-- Win rate < 30%: shift all curves -1 tier (easier baseline, mercy mode)
-- 30–70%: unchanged
+### Suspect 2 — Throw inside `endMatch` / super-power effect crashes the loop
+If `getSuper(s.superId)`, `recordMatchResult`, `grantMatchRewards`, or the new Mirror Wall / Phantom Clone / Chain Lightning branches throw, the React error boundary above this route can unmount `PaddleClashArena`. Next render → fresh `useState("start")`. Likely triggers: `equipped.super` missing from older saved data (migration gap), or `activeSuperP1.until` being read when `pendingHit` is set, etc.
 
-Stored as `pca:ai:skill:v1` → `{ recentResults: ('W'|'L')[], tier: -1 | 0 | 1 | 2 }`.
+## Fix
 
-**Rubber-banding (subtle, Arcade only):** if player is losing by 4+ points, AI's `trackingError` increases 30% for next 2 points. Disabled in Challenge / Boss for fairness.
+### 1. Eliminate the SSR/CSR hydration mismatch (root cause #1)
+- Change `useRewards()` (and any `localStorage`-reading state) to initialize with the **default** value, then hydrate from `localStorage` inside a `useEffect`. Render coins / XP / owned items as `0` / empty on the server pass, then update once on the client.
+- Same treatment for `useSettings()` and `getSkillTier()` if they read storage during render.
+- Verify by reloading mid-match: the runtime hydration error should be gone.
 
-## 3. UI additions
+### 2. Guard the super-power / rewards code paths (root cause #2)
+- In `rewards.ts`, harden the localStorage migration: when loading old saves missing `equipped.super` / `ownedSupers`, fill in `{ super: "meteor", ownedSupers: ["meteor"] }` before returning. Same for any new SHOP_ITEMS the user hasn't seen.
+- In `PaddleClashArena.tsx` `activateSuper` and per-frame effect tick, fall back to `getSuper("meteor")` if `getSuper(s.superId)` returns undefined, and skip effects whose `until` is undefined for time-based powers.
+- Wrap `endMatch`'s reward block in a `try/catch` that still calls `setScreen("end")` even if reward grant throws, so a single bad reward can never bounce the player to start.
 
-- **Super Meter**: vertical glowing bar next to each player's score, fills with gold gradient, pulses + emits sparks when full.
-- **Super Power picker** on start screen: 5 cards (locked ones grayscale with unlock requirement).
-- **Difficulty indicator**: small chip under AI score showing current tier (`EASY → NORMAL → HARD → ELITE`) that animates when it ramps up mid-match.
-- **Activation banner**: full-width slide-in showing power name + icon when triggered.
+### 3. Add a top-level error boundary that does NOT remount the whole arena
+Wrap `PaddleClashArena` in a small error boundary (or use the existing one) that shows an inline "Something broke — return to menu" panel **without** discarding the canvas tree, so even a thrown render error can't silently reset `screen` to `"start"`.
 
-## 4. Technical notes
-
-- New file `src/lib/superPowers.ts` — power definitions, meter logic, active-effect state machine.
-- New file `src/lib/aiDifficulty.ts` — `getAIParams(mode, score, playerSkillTier)` returning the param object each frame; `recordMatchResult(win)` updates rolling skill tier.
-- Extend `src/lib/rewards.ts` `SHOP_ITEMS` with 4 super-power unlocks (coin-gated) + grant default `meteor_smash` to all players. Add `equipped.superPower` field with migration default.
-- `src/components/PaddleClashArena.tsx`:
-  - Add `superMeterP1`, `superMeterP2`, `activeEffects[]` to game state refs.
-  - Per-frame: tick active effects, apply modifiers to ball/paddle physics before existing update.
-  - Replace fixed AI block with `getAIParams(...)` call driven by current score + stored skill tier.
-  - Wire `Space` / `Enter` keydown + on-canvas tap zones for activation.
-  - On match end: call `recordMatchResult(playerWon)`.
-- Render layer: meter bars, difficulty chip, activation banner, new particle bursts (reuse existing hit-spark system with new color palettes).
+### 4. Verify
+- Reload the app, start an Arcade match, play past several rallies, ensure no runtime errors in console.
+- Fill the super meter, activate the super, keep playing — match must continue.
+- Reach the win target — confirm the End screen shows (not Start).
+- Test in Challenge and Boss modes too.
 
 ## Out of scope
-- Online play, accounts, sharing super loadouts.
-- New game modes beyond the existing four.
-- Audio (can layer in later).
+
+- No gameplay/balance changes.
+- No UI redesign of HUD, shop, or end screen.
+- No new powers or new shop items.

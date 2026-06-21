@@ -67,7 +67,8 @@ export default function PaddleClashArena() {
   const [mode, setMode] = useState<Mode>("arcade");
   const [winner, setWinner] = useState<Winner>(null);
   const [scores, setScores] = useState({ player: 0, ai: 0 });
-  const [settings, setSettings] = useState<SettingsSave>(() => loadSettings());
+  const [settings, setSettings] = useState<SettingsSave>(defaultSettings);
+  const [settingsHydrated, setSettingsHydrated] = useState(false);
   const [activeBadges, setActiveBadges] = useState<{ kind: PowerKind; owner: "player" | "ai"; ms: number }[]>([]);
   const [rally, setRally] = useState(0);
   const [showDaily, setShowDaily] = useState(false);
@@ -77,7 +78,9 @@ export default function PaddleClashArena() {
   const [superBanner, setSuperBanner] = useState<{ id: SuperId; ts: number } | null>(null);
 
 
-  useEffect(() => { persistSettings(settings); }, [settings]);
+  // Hydrate settings from localStorage after mount (avoid SSR mismatch)
+  useEffect(() => { setSettings(loadSettings()); setSettingsHydrated(true); }, []);
+  useEffect(() => { if (settingsHydrated) persistSettings(settings); }, [settings, settingsHydrated]);
 
   // Auto-open daily reward on first start screen visit if available
   const dailyAutoShown = useRef(false);
@@ -427,38 +430,44 @@ export default function PaddleClashArena() {
       const s = state.current;
       s.running = false;
       setWinner(w);
-      // Build match summary & grant rewards
-      const summary: MatchSummary = {
-        won: w === "player",
-        mode: s.mode,
-        score: s.scores.player,
-        opponentScore: s.scores.ai,
-        pickups: s.pickups,
-        maxRally: s.maxRally,
-        comeback: s.wasDownBy3 && w === "player",
-        perfect: s.scores.ai === 0 && w === "player",
-      };
-      // Skip rewards for 2-player local mode (no individual progression)
-      if (s.mode !== "twoplayer") {
-        const result = rewardsRef.current.grantMatchRewards(summary);
-        setMatchPayout(result);
-        // Update rolling player-skill tier (affects future matches)
-        recordMatchResult(w === "player");
-      } else {
-        setMatchPayout(null);
-      }
+      try {
+        // Build match summary & grant rewards
+        const summary: MatchSummary = {
+          won: w === "player",
+          mode: s.mode,
+          score: s.scores.player,
+          opponentScore: s.scores.ai,
+          pickups: s.pickups,
+          maxRally: s.maxRally,
+          comeback: s.wasDownBy3 && w === "player",
+          perfect: s.scores.ai === 0 && w === "player",
+        };
+        // Skip rewards for 2-player local mode (no individual progression)
+        if (s.mode !== "twoplayer") {
+          const result = rewardsRef.current.grantMatchRewards(summary);
+          setMatchPayout(result);
+          // Update rolling player-skill tier (affects future matches)
+          recordMatchResult(w === "player");
+        } else {
+          setMatchPayout(null);
+        }
 
-      // Leaderboard entry (only for solo wins)
-      if (w === "player" && s.mode !== "twoplayer") {
-        setSettings(prev => {
-          const entry: LeaderEntry = {
-            name: rewardsRef.current.rank.name.toUpperCase(),
-            score: s.scores.player * 100 + s.maxRally * 5 + (s.mode === "boss" ? 500 : s.mode === "challenge" ? 250 : 0),
-            mode: s.mode, date: Date.now(),
-          };
-          const lb = [...prev.leaderboard, entry].sort((a, b) => b.score - a.score).slice(0, 10);
-          return { ...prev, leaderboard: lb };
-        });
+        // Leaderboard entry (only for solo wins)
+        if (w === "player" && s.mode !== "twoplayer") {
+          setSettings(prev => {
+            const entry: LeaderEntry = {
+              name: rewardsRef.current.rank.name.toUpperCase(),
+              score: s.scores.player * 100 + s.maxRally * 5 + (s.mode === "boss" ? 500 : s.mode === "challenge" ? 250 : 0),
+              mode: s.mode, date: Date.now(),
+            };
+            const lb = [...prev.leaderboard, entry].sort((a, b) => b.score - a.score).slice(0, 10);
+            return { ...prev, leaderboard: lb };
+          });
+        }
+      } catch (err) {
+        // Never let a reward/leaderboard failure bounce the user away from the end screen.
+        console.error("endMatch reward grant failed:", err);
+        setMatchPayout(null);
       }
       setScreen("end");
     };
