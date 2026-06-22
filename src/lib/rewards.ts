@@ -35,7 +35,7 @@ export interface RewardsData {
   equipped: { paddle: string; ball: string; table: string; victory: string; super: SuperId };
   ownedSupers: SuperId[];
   streak: { count: number; lastClaimDate: string | null };
-  daily: { date: string; challenge: DailyChallenge } | null;
+  daily: { date: string; challenges: DailyChallenge[] } | null;
 }
 
 
@@ -158,9 +158,8 @@ function yesterdayKey(): string {
   const d = new Date(); d.setDate(d.getDate() - 1);
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
-function pickDailyChallenge(): DailyChallenge {
-  const c = CHALLENGE_POOL[Math.floor(Math.random() * CHALLENGE_POOL.length)];
-  return { ...c, progress: 0, claimed: false };
+function pickDailyChallenges(): DailyChallenge[] {
+  return CHALLENGE_POOL.map(c => ({ ...c, progress: 0, claimed: false }));
 }
 
 // ====== PERSISTENCE & MIGRATION ======
@@ -245,7 +244,7 @@ export function useRewards() {
     if (!hydrated) return;
     const today = todayKey();
     if (!data.daily || data.daily.date !== today) {
-      setData(d => ({ ...d, daily: { date: today, challenge: pickDailyChallenge() } }));
+      setData(d => ({ ...d, daily: { date: today, challenges: pickDailyChallenges() } }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated]);
@@ -311,35 +310,35 @@ export function useRewards() {
     setData(d => ({ ...d, equipped: { ...d.equipped, [item.category]: id } }));
   }, [isOwned]);
 
+  const bumpChallenge = (daily: RewardsData["daily"], id: string, delta: number) => {
+    if (!daily) return daily;
+    const challenges = daily.challenges.map(ch =>
+      ch.id === id && !ch.claimed
+        ? { ...ch, progress: Math.min(ch.target, ch.progress + delta) }
+        : ch
+    );
+    return { ...daily, challenges };
+  };
+  const setChallengeProgress = (daily: RewardsData["daily"], id: string, value: number) => {
+    if (!daily) return daily;
+    const challenges = daily.challenges.map(ch =>
+      ch.id === id && !ch.claimed && value > ch.progress
+        ? { ...ch, progress: Math.min(ch.target, value) }
+        : ch
+    );
+    return { ...daily, challenges };
+  };
+
   const grantPickup = useCallback(() => {
-    setData(d => {
-      const daily = d.daily;
-      let nextDaily = daily;
-      if (daily && !daily.challenge.claimed && daily.challenge.id === "pickup5") {
-        nextDaily = { ...daily, challenge: { ...daily.challenge, progress: Math.min(daily.challenge.target, daily.challenge.progress + 1) } };
-      }
-      return { ...d, coins: d.coins + 2, xp: d.xp + 3, daily: nextDaily };
-    });
+    setData(d => ({ ...d, coins: d.coins + 2, xp: d.xp + 3, daily: bumpChallenge(d.daily, "pickup5", 1) }));
   }, []);
 
   const recordPoint = useCallback(() => {
-    setData(d => {
-      const daily = d.daily;
-      let nextDaily = daily;
-      if (daily && !daily.challenge.claimed && daily.challenge.id === "points15") {
-        nextDaily = { ...daily, challenge: { ...daily.challenge, progress: Math.min(daily.challenge.target, daily.challenge.progress + 1) } };
-      }
-      return { ...d, coins: d.coins + 5, daily: nextDaily };
-    });
+    setData(d => ({ ...d, coins: d.coins + 5, daily: bumpChallenge(d.daily, "points15", 1) }));
   }, []);
 
   const recordRally = useCallback((rally: number) => {
-    setData(d => {
-      const daily = d.daily;
-      if (!daily || daily.challenge.claimed || daily.challenge.id !== "rally10") return d;
-      if (rally <= daily.challenge.progress) return d;
-      return { ...d, daily: { ...daily, challenge: { ...daily.challenge, progress: Math.min(daily.challenge.target, rally) } } };
-    });
+    setData(d => ({ ...d, daily: setChallengeProgress(d.daily, "rally10", rally) }));
   }, []);
 
   const grantMatchRewards = useCallback((m: MatchSummary): GrantResult => {
@@ -364,15 +363,8 @@ export function useRewards() {
 
     setData(d => {
       let daily = d.daily;
-      if (daily && !daily.challenge.claimed) {
-        const ch = daily.challenge;
-        if (m.won && ch.id === "wins3") {
-          daily = { ...daily, challenge: { ...ch, progress: Math.min(ch.target, ch.progress + 1) } };
-        }
-        if (m.won && ch.id === "boss" && m.mode === "boss") {
-          daily = { ...daily, challenge: { ...ch, progress: 1 } };
-        }
-      }
+      if (m.won) daily = bumpChallenge(daily, "wins3", 1);
+      if (m.won && m.mode === "boss") daily = setChallengeProgress(daily, "boss", 1);
       return {
         ...d,
         coins: d.coins + coins + bonus,
@@ -385,14 +377,16 @@ export function useRewards() {
     return { coins: coins + bonus, xp, leveledUp: newLevel > prevLevel, prevLevel, newLevel, breakdown };
   }, [data.xp]);
 
-  const claimChallenge = useCallback((): number => {
+  const claimChallenge = useCallback((id: string): number => {
     if (!data.daily) return 0;
-    const ch = data.daily.challenge;
-    if (ch.claimed || ch.progress < ch.target) return 0;
+    const ch = data.daily.challenges.find(c => c.id === id);
+    if (!ch || ch.claimed || ch.progress < ch.target) return 0;
     setData(d => ({
       ...d,
       coins: d.coins + ch.reward,
-      daily: d.daily ? { ...d.daily, challenge: { ...ch, claimed: true } } : null,
+      daily: d.daily
+        ? { ...d.daily, challenges: d.daily.challenges.map(c => c.id === id ? { ...c, claimed: true } : c) }
+        : null,
     }));
     return ch.reward;
   }, [data.daily]);

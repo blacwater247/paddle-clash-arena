@@ -88,36 +88,42 @@ export function DailyRewardModal({ r, onClose }: { r: UseRewards; onClose: () =>
           )}
         </div>
 
-        {r.data.daily && (
+        {r.data.daily && r.data.daily.challenges.length > 0 && (
           <div className="mt-5 rounded-lg border border-[oklch(0.7_0.22_245/0.4)] bg-[oklch(0.7_0.22_245/0.08)] p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] tracking-[0.3em] text-[oklch(0.7_0.22_245)]">DAILY CHALLENGE</p>
-                <p className="text-sm font-bold text-foreground">{r.data.daily.challenge.label}</p>
-              </div>
-              <span className="text-xs font-black text-[oklch(0.82_0.17_85)]">+{r.data.daily.challenge.reward}</span>
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full bg-gradient-to-r from-[oklch(0.7_0.22_245)] to-[oklch(0.82_0.17_85)] transition-all"
-                style={{ width: `${(r.data.daily.challenge.progress / r.data.daily.challenge.target) * 100}%` }}
-              />
-            </div>
-            <div className="mt-1 flex items-center justify-between">
-              <span className="text-[10px] tabular-nums text-muted-foreground">
-                {r.data.daily.challenge.progress}/{r.data.daily.challenge.target}
-              </span>
-              {r.data.daily.challenge.progress >= r.data.daily.challenge.target && !r.data.daily.challenge.claimed && (
-                <button
-                  onClick={() => r.claimChallenge()}
-                  className="rounded px-2 py-0.5 text-[10px] font-black tracking-widest text-[oklch(0.82_0.17_85)] hover:bg-[oklch(0.82_0.17_85/0.15)]"
-                >
-                  CLAIM →
-                </button>
-              )}
-              {r.data.daily.challenge.claimed && (
-                <span className="text-[10px] tracking-widest text-emerald-400">CLAIMED ✓</span>
-              )}
+            <p className="mb-2 text-[10px] tracking-[0.3em] text-[oklch(0.7_0.22_245)]">DAILY CHALLENGES</p>
+            <div className="flex flex-col gap-2">
+              {r.data.daily.challenges.map(ch => {
+                const done = ch.progress >= ch.target;
+                return (
+                  <div key={ch.id} className="rounded-md bg-background/40 p-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold text-foreground">{ch.label}</p>
+                      <span className="text-[11px] font-black text-[oklch(0.82_0.17_85)]">+{ch.reward}</span>
+                    </div>
+                    <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={`h-full ${ch.claimed ? "bg-emerald-400" : "bg-gradient-to-r from-[oklch(0.7_0.22_245)] to-[oklch(0.82_0.17_85)]"} transition-all`}
+                        style={{ width: `${(ch.progress / ch.target) * 100}%` }}
+                      />
+                    </div>
+                    <div className="mt-1 flex items-center justify-between">
+                      <span className="text-[10px] tabular-nums text-muted-foreground">{Math.min(ch.progress, ch.target)}/{ch.target}</span>
+                      {ch.claimed ? (
+                        <span className="text-[10px] tracking-widest text-emerald-400">CLAIMED ✓</span>
+                      ) : done ? (
+                        <button
+                          onClick={() => r.claimChallenge(ch.id)}
+                          className="rounded bg-[oklch(0.82_0.17_85)] px-2 py-0.5 text-[10px] font-black tracking-widest text-background hover:brightness-110"
+                        >
+                          CLAIM →
+                        </button>
+                      ) : (
+                        <span className="text-[10px] tracking-widest text-muted-foreground">IN PROGRESS</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
