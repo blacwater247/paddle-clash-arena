@@ -78,6 +78,7 @@ export default function PaddleClashArena() {
   const [superMeter, setSuperMeter] = useState({ p1: 0, p2: 0 });
   const [aiTierLabel, setAiTierLabel] = useState("");
   const [superBanner, setSuperBanner] = useState<{ id: SuperId; ts: number } | null>(null);
+  const [ballSpeed, setBallSpeed] = useState(0);
 
 
   // Hydrate settings from localStorage after mount (avoid SSR mismatch)
