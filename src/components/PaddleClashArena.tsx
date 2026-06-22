@@ -1154,24 +1154,43 @@ export default function PaddleClashArena() {
             <span>STREAK · {rewards.data.streak.count}</span>
           </div>
 
-          {rewards.data.daily && !rewards.data.daily.challenge.claimed && (
-            <div className="mt-5 w-full max-w-xs rounded-lg border border-[oklch(0.7_0.22_245/0.4)] bg-card/50 p-3 text-center">
-              <p className="text-[9px] tracking-[0.3em] text-[oklch(0.7_0.22_245)]">DAILY CHALLENGE</p>
-              <p className="mt-0.5 text-xs font-bold text-foreground">{rewards.data.daily.challenge.label}</p>
-              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
-                <div className="h-full bg-[oklch(0.7_0.22_245)]" style={{ width: `${(rewards.data.daily.challenge.progress / rewards.data.daily.challenge.target) * 100}%` }} />
+          {rewards.data.daily && rewards.data.daily.challenges.length > 0 && (
+            <div className="mt-5 w-full max-w-xs rounded-lg border border-[oklch(0.7_0.22_245/0.4)] bg-card/50 p-3">
+              <p className="text-center text-[9px] tracking-[0.3em] text-[oklch(0.7_0.22_245)]">DAILY CHALLENGES</p>
+              <div className="mt-2 flex flex-col gap-2">
+                {rewards.data.daily.challenges.map(ch => {
+                  const done = ch.progress >= ch.target;
+                  return (
+                    <div key={ch.id} className="rounded-md bg-background/40 p-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-bold text-foreground">{ch.label}</p>
+                        <span className="text-[10px] font-black text-[oklch(0.82_0.17_85)]">+{ch.reward}</span>
+                      </div>
+                      <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={`h-full ${ch.claimed ? "bg-emerald-400" : "bg-[oklch(0.7_0.22_245)]"}`}
+                          style={{ width: `${(ch.progress / ch.target) * 100}%` }}
+                        />
+                      </div>
+                      <div className="mt-1 flex items-center justify-between">
+                        <span className="text-[10px] tabular-nums text-muted-foreground">{Math.min(ch.progress, ch.target)}/{ch.target}</span>
+                        {ch.claimed ? (
+                          <span className="text-[10px] tracking-widest text-emerald-400">CLAIMED ✓</span>
+                        ) : done ? (
+                          <button
+                            onClick={() => rewards.claimChallenge(ch.id)}
+                            className="rounded bg-[oklch(0.82_0.17_85)] px-2 py-0.5 text-[10px] font-black tracking-widest text-background hover:brightness-110"
+                          >
+                            CLAIM +{ch.reward}
+                          </button>
+                        ) : (
+                          <span className="text-[10px] tracking-widest text-muted-foreground">IN PROGRESS</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <p className="mt-1 text-[10px] tabular-nums text-muted-foreground">
-                {rewards.data.daily.challenge.progress}/{rewards.data.daily.challenge.target} · +{rewards.data.daily.challenge.reward}
-              </p>
-              {rewards.data.daily.challenge.progress >= rewards.data.daily.challenge.target && (
-                <button
-                  onClick={() => rewards.claimChallenge()}
-                  className="mt-2 w-full rounded bg-[oklch(0.82_0.17_85)] py-1 text-[10px] font-black tracking-widest text-background"
-                >
-                  CLAIM +{rewards.data.daily.challenge.reward}
-                </button>
-              )}
             </div>
           )}
         </Overlay>
