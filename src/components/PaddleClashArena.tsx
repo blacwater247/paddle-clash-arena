@@ -789,6 +789,8 @@ export default function PaddleClashArena() {
             return { p1: s.superMeterP1, p2: s.superMeterP2 };
           });
           setAiTierLabel(prev => prev === s.aiParams.tierLabel ? prev : s.aiParams.tierLabel);
+          const spd = Math.round(Math.sqrt(s.ballVX * s.ballVX + s.ballVY * s.ballVY));
+          setBallSpeed(prev => prev === spd ? prev : spd);
         }
       }
 
