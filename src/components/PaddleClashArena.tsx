@@ -19,8 +19,8 @@ const PADDLE_W = 18;
 const PADDLE_H = 100;
 const BALL_R = 9;
 const PADDLE_SPEED = 9;
-const BALL_BASE_SPEED = 7;
-const BALL_MAX_SPEED = 20;
+const BALL_BASE_SPEED = 9;
+const BALL_MAX_SPEED = 26;
 
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; }
 interface TrailPoint { x: number; y: number; }
@@ -586,10 +586,10 @@ export default function PaddleClashArena() {
           }
 
           const hit = (s.ballY - (paddleY + pH / 2)) / (pH / 2);
-          let speed = Math.min(BALL_MAX_SPEED, Math.hypot(s.ballVX, s.ballVY) * 1.08);
+          let speed = Math.min(BALL_MAX_SPEED, Math.hypot(s.ballVX, s.ballVY) * 1.12);
           const eff = s.effects.find(e => e.owner === side);
           if (eff?.kind === "smash") {
-            speed = Math.min(BALL_MAX_SPEED + 4, speed * 1.6);
+            speed = Math.min(BALL_MAX_SPEED + 4, speed * 1.8);
             s.smashFor = side;
           }
           if (eff?.kind === "fire") s.ballFire = true;
@@ -600,7 +600,7 @@ export default function PaddleClashArena() {
           const sup = isPlayer ? s.activeSuperP1 : (s.mode === "twoplayer" ? s.activeSuperP2 : null);
           let superTriggered: SuperId | null = null;
           if (sup?.pendingHit && sup.id === "meteor") {
-            speed = Math.min(BALL_MAX_SPEED + 8, speed * 2.5);
+            speed = Math.min(BALL_MAX_SPEED + 8, speed * 3.0);
             s.ballFire = true;
             s.smashFor = side;
             s.shake = 22;
@@ -608,7 +608,7 @@ export default function PaddleClashArena() {
             if (isPlayer) s.activeSuperP1 = null; else s.activeSuperP2 = null;
           }
           if (sup?.pendingHit && sup.id === "chain") {
-            speed = Math.min(BALL_MAX_SPEED + 4, speed * 1.4);
+            speed = Math.min(BALL_MAX_SPEED + 4, speed * 1.6);
             s.chainOnBall = side;
             superTriggered = "chain";
             if (isPlayer) s.activeSuperP1 = null; else s.activeSuperP2 = null;
@@ -616,7 +616,7 @@ export default function PaddleClashArena() {
 
           // AI smash from adaptive difficulty
           if (side === "ai" && s.mode !== "twoplayer" && Math.random() < s.aiParams.smashChance) {
-            speed = Math.min(BALL_MAX_SPEED + 2, speed * 1.35);
+            speed = Math.min(BALL_MAX_SPEED + 2, speed * 1.5);
           }
 
           const angle = isPlayer ? hit * 0.95 : Math.PI - hit * 0.95;
