@@ -35,7 +35,7 @@ export interface RewardsData {
   equipped: { paddle: string; ball: string; table: string; victory: string; super: SuperId };
   ownedSupers: SuperId[];
   streak: { count: number; lastClaimDate: string | null };
-  daily: { date: string; challenge: DailyChallenge } | null;
+  daily: { date: string; challenges: DailyChallenge[] } | null;
 }
 
 
