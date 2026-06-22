@@ -244,7 +244,7 @@ export function useRewards() {
     if (!hydrated) return;
     const today = todayKey();
     if (!data.daily || data.daily.date !== today) {
-      setData(d => ({ ...d, daily: { date: today, challenge: pickDailyChallenge() } }));
+      setData(d => ({ ...d, daily: { date: today, challenges: pickDailyChallenges() } }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated]);
