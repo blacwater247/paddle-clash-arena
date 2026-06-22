@@ -78,6 +78,7 @@ export default function PaddleClashArena() {
   const [superMeter, setSuperMeter] = useState({ p1: 0, p2: 0 });
   const [aiTierLabel, setAiTierLabel] = useState("");
   const [superBanner, setSuperBanner] = useState<{ id: SuperId; ts: number } | null>(null);
+  const [ballSpeed, setBallSpeed] = useState(0);
 
 
   // Hydrate settings from localStorage after mount (avoid SSR mismatch)
@@ -788,6 +789,8 @@ export default function PaddleClashArena() {
             return { p1: s.superMeterP1, p2: s.superMeterP2 };
           });
           setAiTierLabel(prev => prev === s.aiParams.tierLabel ? prev : s.aiParams.tierLabel);
+          const spd = Math.round(Math.sqrt(s.ballVX * s.ballVX + s.ballVY * s.ballVY));
+          setBallSpeed(prev => prev === spd ? prev : spd);
         }
       }
 
@@ -1000,6 +1003,26 @@ export default function PaddleClashArena() {
                 RALLY × {rally}
               </span>
             )}
+            <div className="mt-1 flex flex-col items-center">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[9px] tracking-[0.3em] text-muted-foreground">SPEED</span>
+                <span
+                  className="text-[11px] font-black tabular-nums"
+                  style={{ color: ballSpeed >= BALL_BASE_SPEED * 1.6 ? "oklch(0.82 0.17 85)" : "oklch(0.7 0.22 245)" }}
+                >
+                  {ballSpeed}
+                </span>
+              </div>
+              <div className="mt-0.5 h-1 w-28 overflow-hidden rounded-full bg-muted sm:w-36">
+                <div
+                  className="h-full transition-all duration-100"
+                  style={{
+                    width: `${Math.min(100, (ballSpeed / BALL_MAX_SPEED) * 100)}%`,
+                    background: `linear-gradient(to right, oklch(0.7 0.22 245), #ffffff, oklch(0.82 0.17 85))`,
+                  }}
+                />
+              </div>
+            </div>
             {mode !== "twoplayer" && aiTierLabel && (
               <span
                 key={aiTierLabel}
