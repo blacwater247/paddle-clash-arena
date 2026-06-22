@@ -182,11 +182,16 @@ export function loadRewards(): RewardsData {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as Partial<RewardsData>;
+      const parsed = JSON.parse(raw) as Partial<RewardsData> & { daily?: any };
       const ownedSupers = Array.from(new Set([
         ...((parsed.ownedSupers ?? []) as SuperId[]),
         ...defaultRewards.ownedSupers,
       ]));
+      // Migrate old daily.challenge (singular) → daily.challenges (array)
+      let daily = parsed.daily ?? null;
+      if (daily && !Array.isArray(daily.challenges)) {
+        daily = { date: daily.date, challenges: daily.challenge ? [daily.challenge] : [] };
+      }
       return {
         ...defaultRewards,
         ...parsed,
@@ -194,6 +199,7 @@ export function loadRewards(): RewardsData {
         streak: { ...defaultRewards.streak, ...(parsed.streak ?? {}) },
         ownedItems: Array.from(new Set([...(parsed.ownedItems ?? []), ...defaultRewards.ownedItems])),
         ownedSupers,
+        daily,
       };
     }
     // Migrate from legacy save (wins + paddle + table)
