@@ -158,9 +158,8 @@ function yesterdayKey(): string {
   const d = new Date(); d.setDate(d.getDate() - 1);
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
-function pickDailyChallenge(): DailyChallenge {
-  const c = CHALLENGE_POOL[Math.floor(Math.random() * CHALLENGE_POOL.length)];
-  return { ...c, progress: 0, claimed: false };
+function pickDailyChallenges(): DailyChallenge[] {
+  return CHALLENGE_POOL.map(c => ({ ...c, progress: 0, claimed: false }));
 }
 
 // ====== PERSISTENCE & MIGRATION ======
