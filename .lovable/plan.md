@@ -1,25 +1,20 @@
-## Goal
-When a visitor opens the landing page (`/`), the stages OST should start playing automatically. The "♪ Hear OST / ■ Stop" button stays as a manual toggle.
+## Change
+Increase ball speed constants and collision multipliers so the ball moves faster throughout the match.
 
-## The browser-autoplay reality
-Chrome/Safari/Firefox block `audio.play()` until the user interacts with the page. We can't bypass this — but we can:
-1. Try to play immediately on mount (works if the user has previously interacted with the site, or in browsers with relaxed policies).
-2. If that promise rejects, attach a one-shot listener (`pointerdown` / `keydown` / `touchstart` / `scroll`) that starts playback on the very first interaction and then removes itself.
+## Current → New
+| Constant | Current | New |
+|----------|---------|-----|
+| `BALL_BASE_SPEED` | 7 | 9 |
+| `BALL_MAX_SPEED` | 20 | 26 |
 
-This gives "music plays as soon as possible" without a console error.
+## Collision speed multipliers (in PaddleClashArena.tsx around line 590)
+- Normal bounce: `1.08` → `1.12`
+- Smash power-up: `1.6` → `1.8`
+- Fire power-up: `2.5` → `3.0`
+- Curve power-up: `1.4` → `1.6`
+- Shield deflect: `1.35` → `1.5`
 
-## Changes — `src/components/LandingPage.tsx` only
-- Move audio creation out of `togglePreview` into a `useEffect` that runs on mount:
-  - Create the `Audio(stagesAsset.url)`, set `volume = 0.5`, `loop = true`.
-  - Call `play()`. On success → `setPlaying(true)`.
-  - On rejection → register `pointerdown`/`keydown`/`touchstart`/`scroll` listeners (passive, `once: true`) that call `play()` and set `playing` to true.
-- On unmount: pause audio and remove any pending listeners.
-- `togglePreview` keeps working: pauses if playing, resumes if stopped. The label still flips between "♪ Hear OST" and "■ Stop".
-- Loop the preview so it doesn't end after one play (remove the `onended` reset, since it's now looping).
+The slow-powerup factor (`0.55`) stays unchanged — the user only asked to recalibrate base speed.
 
-## Out of scope
-- No changes to the in-game music engine (`src/lib/music.ts`) or `/play` route — those already arm on user interaction inside the game.
-- No new global mute / settings UI on the landing page (existing toggle button is the control).
-
-## Caveat to share with the user
-Some browsers (notably Safari on iOS and Chrome on a cold first visit) will refuse autoplay outright. In that case the track will start the instant the visitor clicks, taps, or scrolls anywhere — which is the closest "automatic" behavior the web platform allows.
+## Files
+- `src/components/PaddleClashArena.tsx` — update constants and collision math only.
