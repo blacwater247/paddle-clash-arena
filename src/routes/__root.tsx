@@ -77,9 +77,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" },
-      // Google Search Console verification — replace REPLACE_WITH_GSC_TOKEN with the
-      // content value Google gives you in the "HTML tag" verification method.
-      { name: "google-site-verification", content: "REPLACE_WITH_GSC_TOKEN" },
+      { name: "google-site-verification", content: "DTCp5AGNUnpaFTIVvSFavyfBNxpzfOIPka0iY-lCuhQ" },
       { title: "Paddle Clash Arena — Fast Arcade Table Tennis" },
       { name: "description", content: "Paddle Clash Arena is a fast-paced arcade table tennis game with power-ups, boss matches, and local 2-player mode. First to 7 wins." },
       { name: "apple-mobile-web-app-capable", content: "yes" },
