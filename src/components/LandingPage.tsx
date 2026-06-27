@@ -86,7 +86,7 @@ export default function LandingPage() {
       </header>
 
       {/* HERO */}
-      <section className="relative">
+      <section id="top" className="relative">
         <div
           className="absolute inset-0 -z-0 bg-cover bg-center opacity-60"
           style={{ backgroundImage: `url(${heroImg})` }}
@@ -163,6 +163,14 @@ export default function LandingPage() {
               <div className="pointer-events-none absolute -bottom-px left-0 h-px w-full bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent opacity-0 transition group-hover:opacity-100" />
             </div>
           ))}
+        </div>
+        <div className="mt-12 flex justify-center">
+          <a
+            href="#top"
+            className="inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.3em] text-white/70 backdrop-blur transition hover:border-cyan-400/50 hover:text-cyan-300"
+          >
+            ↑ Back to top
+          </a>
         </div>
       </section>
 
