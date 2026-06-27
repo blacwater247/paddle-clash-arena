@@ -164,6 +164,14 @@ export default function LandingPage() {
             </div>
           ))}
         </div>
+        <div className="mt-12 flex justify-center">
+          <a
+            href="#top"
+            className="inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.3em] text-white/70 backdrop-blur transition hover:border-cyan-400/50 hover:text-cyan-300"
+          >
+            ↑ Back to top
+          </a>
+        </div>
       </section>
 
       {/* STAGES */}
