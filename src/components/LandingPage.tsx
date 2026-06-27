@@ -86,7 +86,7 @@ export default function LandingPage() {
       </header>
 
       {/* HERO */}
-      <section className="relative">
+      <section id="top" className="relative">
         <div
           className="absolute inset-0 -z-0 bg-cover bg-center opacity-60"
           style={{ backgroundImage: `url(${heroImg})` }}
