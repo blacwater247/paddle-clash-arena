@@ -1,19 +1,27 @@
-## Feature: Ball Speed / Boost Meter
+## Problem
 
-Add a compact, real-time speed indicator to the play-screen HUD so the player can see how fast the ball is currently moving.
+Two independent audio systems play the same `stages.mp3`:
 
-### Design
-- Position: bottom-center of the HUD overlay, just above the canvas (or integrated into the existing center column below the rally counter).
-- Style: a thin horizontal bar (~120px wide, 4px tall) with a colored fill that shifts from cool blue (slow) through white to hot gold/orange (fast). A small numeric readout sits above or beside it.
-- Label: "SPEED" in small uppercase tracking, plus the current speed as an integer (e.g. "12").
+- `src/components/LandingPage.tsx` constructs its own `new Audio(stagesAsset.url)` at volume `0.5`.
+- `src/components/PaddleClashArena.tsx` uses the shared engine in `src/lib/music.ts` (also default volume `0.5`), which calls `playTrack("stages" | "boss" | "shop")`.
 
-### Technical approach
-- **Read speed in the game loop**: compute `Math.sqrt(ballVX^2 + ballVY^2)` every frame inside the existing `loop` function.
-- **Throttle React sync**: update a new piece of component state (`ballSpeed`) only every ~6 frames, matching the existing super-meter throttle pattern (line ~785). This avoids perf overhead.
-- **Render in HUD**: insert a new element inside the existing center-column HUD (between the rally counter and the AI tier label) that shows the label, numeric speed, and a horizontal progress-style bar filled proportionally to `(speed / BALL_MAX_SPEED)`.
-- **Color interpolation**: the bar color interpolates from `oklch(0.7 0.22 245)` (blue) through white to `oklch(0.82 0.17 85)` (gold) based on the speed ratio.
+When navigating between `/` and `/play` (or when autoplay finally unlocks after a gesture), both instances can be active at once, producing the overlap. Volume is also too loud.
 
-### Files
-- `src/components/PaddleClashArena.tsx` — add `ballSpeed` state, sync from loop, add HUD markup.
+## Fix
 
-No new dependencies needed.
+1. **Unify on the shared engine in `LandingPage.tsx`:**
+   - Remove the local `new Audio(...)` + `audioRef` + manual play/pause logic.
+   - On mount: `armMusic()` after first user gesture (pointerdown/keydown/touchstart), then `flushArmed()`; call `playTrack("stages")`. Also call `playTrack("stages")` directly inside the gesture handler so the first user click both arms and starts.
+   - The "Hear OST" / "Pause Preview" buttons toggle via `setMusicMuted(true|false)` (track keeps looping in the engine, so navigating to `/play` seamlessly continues the same `stages` track instead of starting a second one).
+   - On unmount: do NOT call `stopAllMusic()` — let the engine keep ownership so the arena route can continue the same track without restarting.
+
+2. **Lower default volume** in `src/lib/music.ts`: change initial `volume: 0.5` to `volume: 0.3`. This is the single source of truth now that the landing page uses the engine.
+
+3. **Arena already calls `playTrack("stages" | "boss" | "shop")`** based on screen/mode — no change needed there. Since the engine early-returns when `current === id`, navigating from landing → /play (both on "stages") will not restart or double-play.
+
+## Files
+
+- `src/components/LandingPage.tsx` — replace local audio with shared engine calls; button toggles muted state.
+- `src/lib/music.ts` — default `volume: 0.3`.
+
+No changes to game logic, rewards, HUD, or routing.
