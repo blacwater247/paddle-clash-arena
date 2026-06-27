@@ -1,27 +1,40 @@
-## Problem
+## Goal
 
-Two independent audio systems play the same `stages.mp3`:
+Add an Android Capacitor wrapper alongside the existing iOS one, and prep the site for Google Search Console verification.
 
-- `src/components/LandingPage.tsx` constructs its own `new Audio(stagesAsset.url)` at volume `0.5`.
-- `src/components/PaddleClashArena.tsx` uses the shared engine in `src/lib/music.ts` (also default volume `0.5`), which calls `playTrack("stages" | "boss" | "shop")`.
+## 1. Android Capacitor wrapper
 
-When navigating between `/` and `/play` (or when autoplay finally unlocks after a gesture), both instances can be active at once, producing the overlap. Volume is also too loud.
+- Install `@capacitor/android` as a dev dependency.
+- Update `capacitor.config.ts` to add an `android` block (background color, `allowMixedContent: false`, `webContentsDebuggingEnabled: false` for release).
+- Create `ANDROID_BUILD.md` with the same shape as `IOS_BUILD.md`:
+  - Prereqs: Android Studio, JDK 21, Android SDK, a Google Play Console account ($25 one-time) for store submission.
+  - Generate project: `npm run build && npx cap add android && npx cap sync android && npx cap open android`.
+  - Configure in Android Studio: applicationId, version code/name, signing config, landscape orientation, replace launcher icons under `android/app/src/main/res/mipmap-*`.
+  - Run on emulator or device.
+  - Release: build a signed `.aab`, upload to Play Console, fill store listing, submit for review.
+  - Update flow: `git pull && npm install && npm run build && npx cap sync android`, bump versionCode/versionName.
+- No code changes inside the game — the existing web app loads as-is. Status bar and haptics plugins already installed work on Android too.
 
-## Fix
+## 2. Google Search Console prep
 
-1. **Unify on the shared engine in `LandingPage.tsx`:**
-   - Remove the local `new Audio(...)` + `audioRef` + manual play/pause logic.
-   - On mount: `armMusic()` after first user gesture (pointerdown/keydown/touchstart), then `flushArmed()`; call `playTrack("stages")`. Also call `playTrack("stages")` directly inside the gesture handler so the first user click both arms and starts.
-   - The "Hear OST" / "Pause Preview" buttons toggle via `setMusicMuted(true|false)` (track keeps looping in the engine, so navigating to `/play` seamlessly continues the same `stages` track instead of starting a second one).
-   - On unmount: do NOT call `stopAllMusic()` — let the engine keep ownership so the arena route can continue the same track without restarting.
+- Add a Google Site Verification meta tag to `src/routes/__root.tsx` `head().meta`. Placeholder content value the user pastes from GSC, e.g.:
+  ```
+  { name: "google-site-verification", content: "REPLACE_WITH_GSC_TOKEN" }
+  ```
+  Once the user gives the token I swap it in; deploy; then either they click Verify in GSC or I run the verification API and add the site.
+- Confirm `public/robots.txt` allows crawling and points at the sitemap.
+- Confirm `src/routes/sitemap[.]xml.ts` lists `/` and `/play` with `BASE_URL = "https://paddle-clash-arena.lovable.app"`.
+- Re-check root metadata (title, description, canonical/og:url for `/` and `/play`) is GSC-friendly — leaf canonicals on `index.tsx` and `play.tsx`, not the root.
 
-2. **Lower default volume** in `src/lib/music.ts`: change initial `volume: 0.5` to `volume: 0.3`. This is the single source of truth now that the landing page uses the engine.
+## Files to change
 
-3. **Arena already calls `playTrack("stages" | "boss" | "shop")`** based on screen/mode — no change needed there. Since the engine early-returns when `current === id`, navigating from landing → /play (both on "stages") will not restart or double-play.
+- `package.json` (via `bun add -d @capacitor/android`)
+- `capacitor.config.ts` — add `android` block
+- `ANDROID_BUILD.md` — new
+- `src/routes/__root.tsx` — add `google-site-verification` meta entry
+- `public/robots.txt` and `src/routes/sitemap[.]xml.ts` — verify/adjust if needed
+- `src/routes/index.tsx` / `src/routes/play.tsx` — add leaf canonical if missing
 
-## Files
+## What I need from you next
 
-- `src/components/LandingPage.tsx` — replace local audio with shared engine calls; button toggles muted state.
-- `src/lib/music.ts` — default `volume: 0.3`.
-
-No changes to game logic, rewards, HUD, or routing.
+After you approve, share the **Google Search Console verification token** (the `content="..."` value from the meta-tag method) so I can drop it into the head. The Android project itself (`android/` folder) is generated on your machine with `npx cap add android` — Lovable can't run Android Studio for you, same as iOS.
