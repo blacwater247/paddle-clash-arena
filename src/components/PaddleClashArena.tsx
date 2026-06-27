@@ -960,7 +960,6 @@ export default function PaddleClashArena() {
 
   return (
     <div
-      ref={containerRef}
       className="app-lock relative h-[100dvh] w-screen bg-background"
       style={{
         paddingTop: "env(safe-area-inset-top)",
