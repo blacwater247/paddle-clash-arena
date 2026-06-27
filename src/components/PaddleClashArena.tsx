@@ -959,7 +959,16 @@ export default function PaddleClashArena() {
   const liveCoins = rewards.coins;
 
   return (
-    <div className="relative h-[100dvh] w-screen overflow-hidden bg-background">
+    <div
+      ref={containerRef}
+      className="app-lock relative h-[100dvh] w-screen bg-background"
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingLeft: "env(safe-area-inset-left)",
+        paddingRight: "env(safe-area-inset-right)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
+    >
       {/* Ambient glow */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -left-32 top-1/4 h-96 w-96 rounded-full bg-[oklch(0.65_0.22_255/0.25)] blur-3xl" />
