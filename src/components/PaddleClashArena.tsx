@@ -959,7 +959,15 @@ export default function PaddleClashArena() {
   const liveCoins = rewards.coins;
 
   return (
-    <div className="relative h-[100dvh] w-screen overflow-hidden bg-background">
+    <div
+      className="app-lock relative h-[100dvh] w-screen bg-background"
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingLeft: "env(safe-area-inset-left)",
+        paddingRight: "env(safe-area-inset-right)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
+    >
       {/* Ambient glow */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -left-32 top-1/4 h-96 w-96 rounded-full bg-[oklch(0.65_0.22_255/0.25)] blur-3xl" />
@@ -1074,6 +1082,9 @@ export default function PaddleClashArena() {
           <IconBtn onClick={togglePause} label={state.current.paused ? "▶" : "II"} />
         </div>
       )}
+
+      <RotateHint />
+
 
       <div ref={containerRef} className="absolute inset-0 flex items-center justify-center p-2 sm:p-6">
         <canvas
@@ -1509,3 +1520,34 @@ function SuperPicker({ r }: { r: ReturnType<typeof useRewards> }) {
   );
 }
 
+
+function RotateHint() {
+  const [show, setShow] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      if (typeof window === "undefined") return;
+      const portrait = window.innerHeight > window.innerWidth;
+      const small = window.innerWidth < 640;
+      setShow(portrait && small);
+    };
+    check();
+    window.addEventListener("resize", check);
+    window.addEventListener("orientationchange", check);
+    return () => {
+      window.removeEventListener("resize", check);
+      window.removeEventListener("orientationchange", check);
+    };
+  }, []);
+  if (!show || dismissed) return null;
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-20 z-40 flex justify-center px-4">
+      <button
+        onClick={() => setDismissed(true)}
+        className="pointer-events-auto flex items-center gap-2 rounded-full border border-yellow-400/40 bg-black/70 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.25em] text-yellow-300 backdrop-blur"
+      >
+        ⟳ Rotate for best play · tap to dismiss
+      </button>
+    </div>
+  );
+}

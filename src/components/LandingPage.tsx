@@ -64,10 +64,10 @@ export default function LandingPage() {
 
 
   return (
-    <div className="min-h-screen bg-[#05070f] text-white overflow-hidden">
+    <div className="min-h-screen bg-[#05070f] text-white">
       {/* Top nav */}
-      <header className="relative z-20 mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-        <div className="flex items-center gap-2 font-display text-lg tracking-[0.25em] font-bold">
+      <header className="relative z-20 mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex items-center gap-2 font-display text-sm tracking-[0.25em] font-bold sm:text-lg">
           <span className="inline-block h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_12px_#22d3ee]" />
           PADDLE<span className="text-cyan-400">CLASH</span>
         </div>
@@ -79,7 +79,7 @@ export default function LandingPage() {
         </nav>
         <Link
           to="/play"
-          className="rounded-md border border-cyan-400/40 bg-cyan-400/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-cyan-300 transition hover:bg-cyan-400/20"
+          className="rounded-md border border-cyan-400/40 bg-cyan-400/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-cyan-300 transition hover:bg-cyan-400/20 sm:px-4 sm:py-2 sm:text-xs"
         >
           Play
         </Link>
@@ -101,43 +101,43 @@ export default function LandingPage() {
           }}
         />
 
-        <div className="relative mx-auto max-w-5xl px-6 pt-12 pb-32 text-center md:pt-20 md:pb-44">
+        <div className="relative mx-auto max-w-5xl px-4 pt-8 pb-20 text-center sm:px-6 md:pt-20 md:pb-44">
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-cyan-300 backdrop-blur">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400" />
             Now Playing — Season 1
           </div>
-          <h1 className="font-display text-5xl font-black uppercase leading-[0.95] tracking-tight md:text-7xl lg:text-8xl">
+          <h1 className="font-display text-4xl font-black uppercase leading-[0.95] tracking-tight sm:text-5xl md:text-7xl lg:text-8xl">
             <span className="block text-white drop-shadow-[0_0_25px_rgba(34,211,238,0.4)]">PADDLE CLASH</span>
             <span className="block bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-300 bg-clip-text text-transparent">
               ARENA
             </span>
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-base text-white/70 md:text-lg">
+          <p className="mx-auto mt-5 max-w-2xl text-sm text-white/70 sm:text-base md:text-lg">
             Fast-paced arcade table tennis with super-powers, boss battles, and an original soundtrack.
             Rise from Rookie to Arena God.
           </p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <Link
               to="/play"
-              className="group relative inline-flex items-center gap-2 rounded-md bg-gradient-to-r from-cyan-400 to-blue-500 px-8 py-4 font-display text-base font-bold uppercase tracking-widest text-black shadow-[0_0_40px_rgba(34,211,238,0.5)] transition hover:scale-[1.02] hover:shadow-[0_0_60px_rgba(34,211,238,0.8)]"
+              className="group relative inline-flex items-center justify-center gap-2 rounded-md bg-gradient-to-r from-cyan-400 to-blue-500 px-8 py-4 font-display text-base font-bold uppercase tracking-widest text-black shadow-[0_0_40px_rgba(34,211,238,0.5)] transition hover:scale-[1.02] hover:shadow-[0_0_60px_rgba(34,211,238,0.8)]"
             >
               ▶ Play Now
             </Link>
             <a
               href="#features"
-              className="rounded-md border border-white/20 bg-white/5 px-6 py-4 font-display text-sm font-bold uppercase tracking-widest text-white/80 backdrop-blur transition hover:bg-white/10"
+              className="rounded-md border border-white/20 bg-white/5 px-6 py-4 text-center font-display text-sm font-bold uppercase tracking-widest text-white/80 backdrop-blur transition hover:bg-white/10"
             >
               How to Play
             </a>
             <button
               onClick={togglePreview}
-              className="inline-flex items-center gap-2 rounded-md border border-yellow-400/30 bg-yellow-400/5 px-5 py-4 font-display text-sm font-bold uppercase tracking-widest text-yellow-300 transition hover:bg-yellow-400/15"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-yellow-400/30 bg-yellow-400/5 px-5 py-4 font-display text-sm font-bold uppercase tracking-widest text-yellow-300 transition hover:bg-yellow-400/15"
             >
               {playing ? "■ Stop" : "♪ Hear OST"}
             </button>
           </div>
 
-          <div className="mt-14 flex flex-wrap justify-center gap-8 text-xs uppercase tracking-widest text-white/40">
+          <div className="mt-10 grid grid-cols-2 gap-6 text-xs uppercase tracking-widest text-white/40 sm:mt-14 sm:flex sm:flex-wrap sm:justify-center sm:gap-8">
             <div><span className="block font-display text-2xl text-white">7</span>Win Score</div>
             <div><span className="block font-display text-2xl text-white">4</span>Game Modes</div>
             <div><span className="block font-display text-2xl text-white">30</span>Rank Levels</div>
@@ -147,7 +147,7 @@ export default function LandingPage() {
       </section>
 
       {/* FEATURES */}
-      <section id="features" className="relative mx-auto max-w-7xl px-6 py-24">
+      <section id="features" className="relative mx-auto max-w-7xl px-6 py-14 sm:py-24">
         <SectionTitle eyebrow="Loadout" title="Built for clutch moments" />
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map(f => (
@@ -175,14 +175,14 @@ export default function LandingPage() {
       </section>
 
       {/* STAGES */}
-      <section id="stages" className="relative border-y border-white/5 bg-black/40 py-24">
+      <section id="stages" className="relative border-y border-white/5 bg-black/40 py-14 sm:py-24">
         <div className="mx-auto max-w-7xl px-6">
           <SectionTitle eyebrow="Arenas" title="Eight stages. One king." />
           <div className="mt-12 grid grid-cols-2 gap-3 md:grid-cols-4">
             {STAGES.map(s => (
               <div key={s.name} className="group overflow-hidden rounded-lg border border-white/10 bg-white/[0.02]">
                 <div
-                  className="relative h-32 w-full"
+                  className="relative h-24 w-full sm:h-32"
                   style={{
                     background: `linear-gradient(135deg, ${s.colors[0]} 0%, ${s.colors[1]} 100%)`,
                   }}
@@ -207,7 +207,7 @@ export default function LandingPage() {
       </section>
 
       {/* BOSS */}
-      <section id="boss" className="relative mx-auto max-w-7xl px-6 py-24">
+      <section id="boss" className="relative mx-auto max-w-7xl px-6 py-14 sm:py-24">
         <div className="grid items-center gap-10 md:grid-cols-2">
           <div>
             <SectionTitle eyebrow="Boss Mode" title="Beat the unbeatable" />
@@ -251,7 +251,7 @@ export default function LandingPage() {
       </section>
 
       {/* RANKS */}
-      <section id="ranks" className="relative border-t border-white/5 bg-black/40 py-24">
+      <section id="ranks" className="relative border-t border-white/5 bg-black/40 py-14 sm:py-24">
         <div className="mx-auto max-w-7xl px-6">
           <SectionTitle eyebrow="Progression" title="Rookie to Arena God" />
           <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
@@ -271,7 +271,7 @@ export default function LandingPage() {
       </section>
 
       {/* SOUNDTRACK STRIP */}
-      <section className="relative mx-auto max-w-5xl px-6 py-20 text-center">
+      <section className="relative mx-auto max-w-5xl px-6 py-14 text-center sm:py-20">
         <SectionTitle eyebrow="Audio" title="An original soundtrack" />
         <p className="mt-6 text-white/60">
           Three custom tracks score every match — stages, boss fights, and the shop.
@@ -286,8 +286,8 @@ export default function LandingPage() {
       </section>
 
       {/* FINAL CTA */}
-      <section className="relative mx-auto max-w-4xl px-6 pb-24 text-center">
-        <div className="relative overflow-hidden rounded-2xl border border-cyan-400/30 bg-gradient-to-br from-cyan-500/10 via-blue-600/5 to-transparent p-12">
+      <section className="relative mx-auto max-w-4xl px-4 pb-14 sm:px-6 sm:pb-24 text-center">
+        <div className="relative overflow-hidden rounded-2xl border border-cyan-400/30 bg-gradient-to-br from-cyan-500/10 via-blue-600/5 to-transparent p-6 sm:p-12">
           <h2 className="font-display text-3xl font-black uppercase tracking-tight md:text-5xl">
             Drop in. <span className="text-cyan-300">Drop bombs.</span>
           </h2>
