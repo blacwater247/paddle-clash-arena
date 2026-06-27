@@ -28,7 +28,7 @@ let engine: Engine | null = null;
 function getEngine(): Engine | null {
   if (typeof window === "undefined") return null;
   if (!engine) {
-    engine = { audios: {}, current: null, volume: 0.5, muted: false, armed: false, pendingFades: [] };
+    engine = { audios: {}, current: null, volume: 0.3, muted: false, armed: false, pendingFades: [] };
   }
   return engine;
 }

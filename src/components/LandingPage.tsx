@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import heroImg from "@/assets/landing-hero.jpg";
-import stagesAsset from "@/assets/music-stages.mp3.asset.json";
+import { armMusic, flushArmed, playTrack, setMusicMuted } from "@/lib/music";
 
 const FEATURES = [
   { icon: "⚡", title: "Power-Ups", body: "Smash, Slow, Shield, Curve & Fire — grab them mid-rally to swing the game." },
@@ -33,45 +33,35 @@ const RANKS = [
 ];
 
 export default function LandingPage() {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlaying] = useState(true);
 
   useEffect(() => {
-    const a = new Audio(stagesAsset.url);
-    a.volume = 0.5;
-    a.loop = true;
-    audioRef.current = a;
+    // Select the stages track in the shared engine; will start when armed.
+    playTrack("stages");
 
-    let cleanupListeners: (() => void) | null = null;
     const startOnInteract = () => {
-      a.play().then(() => setPlaying(true)).catch(() => {});
-      cleanupListeners?.();
-    };
-
-    const tryAutoplay = a.play();
-    if (tryAutoplay && typeof tryAutoplay.then === "function") {
-      tryAutoplay.then(() => setPlaying(true)).catch(() => {
-        const events: (keyof WindowEventMap)[] = ["pointerdown", "keydown", "touchstart", "scroll"];
-        events.forEach(ev => window.addEventListener(ev, startOnInteract, { once: true, passive: true } as AddEventListenerOptions));
-        cleanupListeners = () => events.forEach(ev => window.removeEventListener(ev, startOnInteract));
-      });
-    } else {
+      armMusic();
+      flushArmed();
+      setMusicMuted(false);
       setPlaying(true);
-    }
-
-    return () => {
-      cleanupListeners?.();
-      try { a.pause(); } catch {}
-      audioRef.current = null;
+      cleanup();
     };
+    const events: (keyof WindowEventMap)[] = ["pointerdown", "keydown", "touchstart"];
+    events.forEach(ev =>
+      window.addEventListener(ev, startOnInteract, { once: true, passive: true } as AddEventListenerOptions)
+    );
+    const cleanup = () => events.forEach(ev => window.removeEventListener(ev, startOnInteract));
+    return cleanup;
+    // Note: don't stopAllMusic on unmount — let the engine continue into /play seamlessly.
   }, []);
 
   const togglePreview = () => {
-    const a = audioRef.current;
-    if (!a) return;
-    if (playing) { a.pause(); setPlaying(false); }
-    else { a.play().then(() => setPlaying(true)).catch(() => {}); }
+    armMusic();
+    flushArmed();
+    if (playing) { setMusicMuted(true); setPlaying(false); }
+    else { setMusicMuted(false); setPlaying(true); }
   };
+
 
   return (
     <div className="min-h-screen bg-[#05070f] text-white overflow-hidden">
