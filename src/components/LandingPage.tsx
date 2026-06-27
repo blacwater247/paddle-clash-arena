@@ -147,7 +147,7 @@ export default function LandingPage() {
       </section>
 
       {/* FEATURES */}
-      <section id="features" className="relative mx-auto max-w-7xl px-6 py-24">
+      <section id="features" className="relative mx-auto max-w-7xl px-6 py-14 sm:py-24">
         <SectionTitle eyebrow="Loadout" title="Built for clutch moments" />
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map(f => (
@@ -175,14 +175,14 @@ export default function LandingPage() {
       </section>
 
       {/* STAGES */}
-      <section id="stages" className="relative border-y border-white/5 bg-black/40 py-24">
+      <section id="stages" className="relative border-y border-white/5 bg-black/40 py-14 sm:py-24">
         <div className="mx-auto max-w-7xl px-6">
           <SectionTitle eyebrow="Arenas" title="Eight stages. One king." />
           <div className="mt-12 grid grid-cols-2 gap-3 md:grid-cols-4">
             {STAGES.map(s => (
               <div key={s.name} className="group overflow-hidden rounded-lg border border-white/10 bg-white/[0.02]">
                 <div
-                  className="relative h-32 w-full"
+                  className="relative h-24 w-full sm:h-32"
                   style={{
                     background: `linear-gradient(135deg, ${s.colors[0]} 0%, ${s.colors[1]} 100%)`,
                   }}
@@ -207,7 +207,7 @@ export default function LandingPage() {
       </section>
 
       {/* BOSS */}
-      <section id="boss" className="relative mx-auto max-w-7xl px-6 py-24">
+      <section id="boss" className="relative mx-auto max-w-7xl px-6 py-14 sm:py-24">
         <div className="grid items-center gap-10 md:grid-cols-2">
           <div>
             <SectionTitle eyebrow="Boss Mode" title="Beat the unbeatable" />
@@ -251,7 +251,7 @@ export default function LandingPage() {
       </section>
 
       {/* RANKS */}
-      <section id="ranks" className="relative border-t border-white/5 bg-black/40 py-24">
+      <section id="ranks" className="relative border-t border-white/5 bg-black/40 py-14 sm:py-24">
         <div className="mx-auto max-w-7xl px-6">
           <SectionTitle eyebrow="Progression" title="Rookie to Arena God" />
           <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
@@ -271,7 +271,7 @@ export default function LandingPage() {
       </section>
 
       {/* SOUNDTRACK STRIP */}
-      <section className="relative mx-auto max-w-5xl px-6 py-20 text-center">
+      <section className="relative mx-auto max-w-5xl px-6 py-14 text-center sm:py-20">
         <SectionTitle eyebrow="Audio" title="An original soundtrack" />
         <p className="mt-6 text-white/60">
           Three custom tracks score every match — stages, boss fights, and the shop.
@@ -286,8 +286,8 @@ export default function LandingPage() {
       </section>
 
       {/* FINAL CTA */}
-      <section className="relative mx-auto max-w-4xl px-6 pb-24 text-center">
-        <div className="relative overflow-hidden rounded-2xl border border-cyan-400/30 bg-gradient-to-br from-cyan-500/10 via-blue-600/5 to-transparent p-12">
+      <section className="relative mx-auto max-w-4xl px-4 pb-14 sm:px-6 sm:pb-24 text-center">
+        <div className="relative overflow-hidden rounded-2xl border border-cyan-400/30 bg-gradient-to-br from-cyan-500/10 via-blue-600/5 to-transparent p-6 sm:p-12">
           <h2 className="font-display text-3xl font-black uppercase tracking-tight md:text-5xl">
             Drop in. <span className="text-cyan-300">Drop bombs.</span>
           </h2>
