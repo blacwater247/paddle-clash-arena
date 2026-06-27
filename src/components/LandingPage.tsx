@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import heroImg from "@/assets/landing-hero.jpg";
-import stagesAsset from "@/assets/music-stages.mp3.asset.json";
+import { armMusic, flushArmed, playTrack, setMusicMuted } from "@/lib/music";
 
 const FEATURES = [
   { icon: "⚡", title: "Power-Ups", body: "Smash, Slow, Shield, Curve & Fire — grab them mid-rally to swing the game." },
