@@ -10,6 +10,11 @@ const config: CapacitorConfig = {
     backgroundColor: "#0a1a3d",
     limitsNavigationsToAppBoundDomains: true,
   },
+  android: {
+    backgroundColor: "#0a1a3d",
+    allowMixedContent: false,
+    webContentsDebuggingEnabled: false,
+  },
 };
 
 export default config;
