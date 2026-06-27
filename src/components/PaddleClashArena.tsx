@@ -1083,6 +1083,9 @@ export default function PaddleClashArena() {
         </div>
       )}
 
+      <RotateHint />
+
+
       <div ref={containerRef} className="absolute inset-0 flex items-center justify-center p-2 sm:p-6">
         <canvas
           ref={canvasRef}
